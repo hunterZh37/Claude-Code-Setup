@@ -200,7 +200,12 @@ place() { # place kind rendered_file dest
     return 0
   fi
   if [[ $DRY -eq 1 ]]; then
-    if [[ -e "$dest" ]]; then say "… would back up and update $label"; else say "… would create $label"; fi
+    if [[ -e "$dest" ]]; then
+      say "… would back up and update $label:"
+      diff -u --label "$label (now)" --label "$label (new)" "$dest" "$src" | sed -n '3,80p' || true
+    else
+      say "… would create $label"
+    fi
     return 0
   fi
   if [[ -e "$dest" && ! -w "$dest" ]]; then

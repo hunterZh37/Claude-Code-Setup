@@ -9,7 +9,7 @@ TESTS="$REPO/tests"
 source "$TESTS/lib.sh"
 
 parts=("$@")
-[[ ${#parts[@]} -gt 0 ]] || parts=(core migrate stress bench web)
+[[ ${#parts[@]} -gt 0 ]] || parts=(core migrate stress bench web plugin)
 for part in "${parts[@]}"; do
   echo "=== $part"
   # shellcheck source=/dev/null

@@ -191,6 +191,28 @@ With `--no-llm` the file keeps all five lines, gets the block, and the run print
       (the target uses plain glyphs (✓ ✗ ! … ○), never emoji)
 ```
 
+## Install as a plugin
+
+The repo is also a Claude Code plugin marketplace. Inside Claude Code:
+
+```
+/plugin marketplace add hunterZh37/Claude-Code-Setup
+/plugin install answer-first@answer-first-plugins
+```
+
+Or in one step (Claude Code 2.1.275 or later): `/plugin install answer-first --marketplace hunterZh37/Claude-Code-Setup`. From a shell: `claude plugin marketplace add hunterZh37/Claude-Code-Setup` then `claude plugin install answer-first@answer-first-plugins`.
+
+| You get | How to use it |
+|---|---|
+| **Output style** `answer-first` | pick it with `/output-style`. It says "the user" since a plugin can't ask your name |
+| **`/answer-first:setup-format`** | adds your name, the CLAUDE.md core rules and the `outputStyle` setting. It shows a preview with diffs and asks before writing, using the same installer, backups and undo as `./setup.sh --format` |
+| **`/answer-first:setup-web`** | prints the claude.ai texts to paste |
+| **`/answer-first:worked-hours`** | today's hours from your transcripts |
+
+A plugin can ship output styles and commands, but it can't edit your `CLAUDE.md` or settings by itself, which is why `setup-format` exists. Subagents only see the format through `CLAUDE.md`. Remove the plugin with `claude plugin uninstall answer-first@answer-first-plugins`, and undo `setup-format` with `uninstall.sh` from the plugin's folder.
+
+**Anthropic's plugin directory** is a separate, manual step for the maintainer. It needs a paid claude.ai plan, a clean `claude plugin validate --strict` and an icon, and goes through the developer portal described in the [publishing docs](https://code.claude.com/docs/en/plugins/publish#submit-to-anthropics-directory).
+
 ## Use it on claude.ai
 
 Claude on the web and in the desktop app can't be set up by a script. Its settings have no public API, so `./setup.sh --web` only prepares the text: it fills in your name, copies the short version to your clipboard and prints where to paste each one. It never opens a browser or signs in.

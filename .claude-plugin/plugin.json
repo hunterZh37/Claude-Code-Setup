@@ -1,0 +1,12 @@
+{
+  "name": "answer-first",
+  "displayName": "Answer-first replies",
+  "description": "An answer-first, visual reply format (glyph status rows, tables, bars, Actionables last), a /worked-hours command, and setup commands for CLAUDE.md and claude.ai",
+  "author": { "name": "Hunter Zhang", "url": "https://github.com/hunterZh37" },
+  "homepage": "https://github.com/hunterZh37/Claude-Code-Setup",
+  "repository": "https://github.com/hunterZh37/Claude-Code-Setup",
+  "license": "MIT",
+  "keywords": ["output-style", "adhd", "formatting", "replies"],
+  "commands": ["./plugin/commands/"],
+  "outputStyles": ["./plugin/output-styles/"]
+}
