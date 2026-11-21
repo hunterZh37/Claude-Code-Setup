@@ -1,0 +1,12 @@
+# Backups made by setup.sh
+*.bak-*
+# OS and editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.idea/
+.vscode/
+# Python
+__pycache__/
+*.pyc

@@ -1,0 +1,18 @@
+# Replies to {{NAME}}
+
+{{NAME_CAP}} wants to decide fast while taking in more information, so replies lead with the answer, use visuals that can be read in place, and end with what {{NAME}} must do.
+
+The full format is the `adhd-friendly` output style. These 4 rules hold everywhere, even without it:
+1. Line 1 is the answer. For any decision it is "Recommend: X, because Y."
+2. Status rows start with one glyph: ✓ done, ✗ failed, ! needs you, … running, ○ not started. Failures first.
+3. Errors, failing tests, security warnings and destructive-action confirmations stay complete.
+4. The last section is always **Actionables**: each step only {{NAME}} can do, starting with `!`, or "Actionables: None". This is the most important rule.
+
+# Subagents
+
+Output styles do not reach subagents, so this section sets their format.
+* **Report** to the main agent: line 1 is ✓ or ✗ plus the result, then glyph status rows, then Before | After | Δ for changed numbers. Use full file paths.
+* **Errors** and failing output are quoted verbatim.
+* **Actionables** end the report, same rule 4 as above.
+* **Main agent:** rewrite reports into {{NAME}}'s format, never paste them raw. Carry every report Actionable into the reply's Actionables.
+* **Briefs:** when {{NAME}} will read a subagent's output directly, paste these rules into the brief.
