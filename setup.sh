@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set up Claude Code with an answer-first reply format, a progress panel and useful tools.
+# Set up Claude Code with an adhd-friendly reply format, a progress panel and useful tools.
 # Safe to re-run: unchanged files are skipped and changed ones are backed up first.
 # Re-run under bash if started with sh or zsh.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
@@ -19,20 +19,23 @@ PROGRESS_MARKETPLACE_REPO="hunterZh37/progress-bar-plugin"
 
 usage() {
   cat <<'EOF'
-Usage: ./setup.sh [components] [options]
+Usage: ./setup.sh
 
-Components (pick any, or none to be asked one by one):
+Sets up the reply format, the progress-bar plugin and the claude.ai
+texts, and migrates your existing agent rules (with a diff and a yes per file).
+
+Flags below are for tests and the plugin commands. You do not need them.
+
+Components (pick any to install only those):
   --format         adhd-friendly output style + core rules in ~/.claude/CLAUDE.md
-  --commands       /worked-hours command + workday-hours.py script
   --plugins        progress-bar plugin (status line + progress panel)
   --extra-plugins  also enable official frontend-design and mattpocock-skills
-  --rtk            token-saving command output (needs rtk, installed by you)
   --tools          Brewfile tools (gh, jq, ripgrep, fd, uv, ghostty) + Claude Code
   --migrate        reformat existing CLAUDE.md, AGENTS.md, Cursor/Copilot/Gemini rules
                    to this format (shows a diff and asks before each write)
   --web            paste-ready text for claude.ai (preferences, a Style, Project
                    instructions), copied to the clipboard. Never opens a browser
-  --all            format, commands, plugins, rtk, tools and web (not migrate)
+  --all            format, plugins, tools and web (not migrate)
 
 Options:
   --name NAME      who reads the replies (default: "the user")
@@ -53,22 +56,20 @@ warn() { printf '! %s\n' "$*"; }
 die()  { printf '✗ %s\n' "$*" >&2; exit 1; }
 
 # ---------- args ----------
-DO_FORMAT=0 DO_COMMANDS=0 DO_PLUGINS=0 DO_EXTRA=0 DO_RTK=0 DO_TOOLS=0 DO_MIGRATE=0 DO_WEB=0
+DO_FORMAT=0 DO_PLUGINS=0 DO_EXTRA=0 DO_TOOLS=0 DO_MIGRATE=0 DO_WEB=0
 NAME="" YES=0 DRY=0 FORCE_STYLE=0 CHOSE=0 NO_LLM=0 PROJECT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --format) DO_FORMAT=1; CHOSE=1 ;;
-    --commands) DO_COMMANDS=1; CHOSE=1 ;;
     --plugins) DO_PLUGINS=1; CHOSE=1 ;;
     --extra-plugins) DO_PLUGINS=1; DO_EXTRA=1; CHOSE=1 ;;
-    --rtk) DO_RTK=1; CHOSE=1 ;;
     --tools) DO_TOOLS=1; CHOSE=1 ;;
     --migrate) DO_MIGRATE=1; CHOSE=1 ;;
     --web) DO_WEB=1; CHOSE=1 ;;
     --no-llm) NO_LLM=1 ;;
     --project) [[ $# -ge 2 ]] || die "--project needs a path"; PROJECT="$2"; shift ;;
     --project=*) PROJECT="${1#--project=}" ;;
-    --all) DO_FORMAT=1; DO_COMMANDS=1; DO_PLUGINS=1; DO_RTK=1; DO_TOOLS=1; DO_WEB=1; CHOSE=1 ;;
+    --all) DO_FORMAT=1; DO_PLUGINS=1; DO_TOOLS=1; DO_WEB=1; CHOSE=1 ;;
     --name) [[ $# -ge 2 ]] || die "--name needs a value"; NAME="$2"; shift ;;
     --name=*) NAME="${1#--name=}" ;;
     --yes|-y) YES=1 ;;
@@ -113,25 +114,16 @@ OS="$(uname -s)"
 case "$OS" in Darwin|Linux) ;; *) die "unsupported OS: $OS (macOS and Linux only)" ;; esac
 
 if [[ $CHOSE -eq 0 ]]; then
-  if [[ $HAVE_TTY -eq 0 ]]; then
-    usage >&2
-    die "no components chosen and no terminal to ask. Pass flags such as --format --commands --plugins."
-  fi
-  say "Choose what to install (Enter accepts the default):"
-  ask_yn "  Reply format (output style + CLAUDE.md rules)?" y && DO_FORMAT=1
-  ask_yn "  /worked-hours command?" y && DO_COMMANDS=1
-  ask_yn "  progress-bar plugin (status line + panel)?" y && DO_PLUGINS=1
-  ask_yn "  rtk token saving (you install rtk yourself)?" n && DO_RTK=1
-  ask_yn "  CLI tools via Homebrew + Claude Code?" n && DO_TOOLS=1
-  ask_yn "  Migrate your existing CLAUDE.md / AGENTS.md / Cursor rules to this format?" n && DO_MIGRATE=1
-  ask_yn "  Text to paste into claude.ai so web chats use the format too?" n && DO_WEB=1
-fi
-if [[ $DO_PLUGINS -eq 1 && $DO_EXTRA -eq 0 ]]; then
-  ask_yn "  Also enable official frontend-design and mattpocock-skills plugins?" n && DO_EXTRA=1
+  # The default run sets up everything and migrates existing rules. Migrate still shows
+  # a diff and asks before it changes any file you wrote.
+  DO_FORMAT=1 DO_PLUGINS=1 DO_WEB=1 DO_MIGRATE=1
 fi
 
-if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_COMMANDS -eq 1 || $DO_MIGRATE -eq 1 || $DO_WEB -eq 1 ) ]]; then
-  NAME="$(ask_text "Name Claude should use for you in replies and rules?" "the user")"
+if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_MIGRATE -eq 1 || $DO_WEB -eq 1 ) ]]; then
+  # A re-run keeps the name from the installed block, so it never resets to "the user".
+  prev_name="$(awk '/claude-code-setup:begin/ {b=1; next} b && /^# Replies to / {sub(/^# Replies to /, ""); sub(/\r$/, ""); print; exit}' \
+    "$CLAUDE_DIR/CLAUDE.md" 2>/dev/null || true)"
+  NAME="$(ask_text "Name Claude should use for you in replies and rules?" "${prev_name:-the user}")"
 fi
 NAME="${NAME:-the user}"
 [[ "$NAME" != *$'\n'* ]] || die "--name must be one line"
@@ -233,30 +225,12 @@ PATCH_ITEMS=()
 add_setting() { PATCH_ITEMS+=("$1"); } # one JSON object per item
 
 # ---------- components ----------
-RTK_READY=0
-if [[ $DO_RTK -eq 1 ]]; then
-  say ""; say "rtk (token saving)"
-  if command -v rtk >/dev/null 2>&1; then
-    install_template "$REPO_DIR/templates/RTK.md" "$CLAUDE_DIR/RTK.md"
-    RTK_READY=1
-  else
-    warn "rtk is not installed, so RTK.md was skipped (it would tell Claude output is condensed when it is not)."
-    warn "Install it from https://github.com/rtk-ai/rtk then re-run ./setup.sh --rtk"
-  fi
-fi
-
 if [[ $DO_FORMAT -eq 1 ]]; then
   say ""; say "Reply format"
   install_template "$REPO_DIR/templates/output-styles/adhd-friendly.md.tmpl" "$CLAUDE_DIR/output-styles/adhd-friendly.md"
 
   block="$TMP/block.md"
   helper render "$REPO_DIR/templates/CLAUDE.md.tmpl" "$block" "$NAME"
-  # Import RTK.md only when this setup installed it (now or on an earlier run).
-  if [[ $RTK_READY -eq 1 ]] || { [[ -f "$CLAUDE_DIR/RTK.md" ]] && manifest_has "$CLAUDE_DIR/RTK.md"; }; then
-    if ! helper has-outside "$CLAUDE_DIR/CLAUDE.md" "@RTK.md"; then
-      printf '\n@RTK.md\n' >>"$block"
-    fi
-  fi
   if [[ -e "$CLAUDE_DIR/CLAUDE.md" && ! -f "$CLAUDE_DIR/CLAUDE.md" ]]; then
     warn "skipped $(tilde "$CLAUDE_DIR")/CLAUDE.md: it is not a regular file"
   elif helper is-text "$CLAUDE_DIR/CLAUDE.md"; then
@@ -284,13 +258,6 @@ PY
     fi
   fi
   add_setting "{\"path\": [\"outputStyle\"], \"value\": \"adhd-friendly\", \"force\": $style_force}"
-fi
-
-if [[ $DO_COMMANDS -eq 1 ]]; then
-  say ""; say "Commands"
-  install_template "$REPO_DIR/templates/commands/worked-hours.md" "$CLAUDE_DIR/commands/worked-hours.md"
-  install_template "$REPO_DIR/templates/scripts/workday-hours.py" "$CLAUDE_DIR/scripts/workday-hours.py"
-  if [[ $DRY -eq 0 && -w "$CLAUDE_DIR/scripts/workday-hours.py" ]]; then chmod +x "$CLAUDE_DIR/scripts/workday-hours.py"; fi
 fi
 
 if [[ $DO_WEB -eq 1 ]]; then
@@ -405,10 +372,6 @@ command -v claude >/dev/null 2>&1 || say "! Install Claude Code: https://code.cl
 say "! Sign in: run 'claude' and follow the login prompt (~1 min)"
 command -v gh >/dev/null 2>&1 && say "! GitHub CLI: run 'gh auth login' (~1 min)"
 say "! Claude in Chrome (optional): install the extension from https://claude.ai/chrome (~2 min)"
-if [[ $DO_RTK -eq 1 ]]; then
-  if [[ $RTK_READY -eq 1 ]]; then say "! rtk: run 'rtk init -g' to add its hook, then re-run './setup.sh --rtk --format' (~1 min)"
-  else say "! rtk: install from https://github.com/rtk-ai/rtk, run 'rtk init -g', then './setup.sh --rtk --format'"; fi
-fi
 [[ $DO_PLUGINS -eq 1 ]] && say "! Plugins: on first start, accept the progress-bar marketplace prompt, or run '/plugin install progress-bar@progress-bar'"
 if [[ "$WEB_NOTE" == 1 ]]; then
   say "! claude.ai, every chat: open Settings, Your Claude, the Instructions box, paste (the text is on your clipboard): $(tilde "$WEB_DIR/preferences.md")"
@@ -419,8 +382,8 @@ fi
 say "! Restart Claude Code so the output style and plugins load"
 [[ $DO_FORMAT -eq 1 ]] && say "! Verify: run '/output-style' in Claude Code and check adhd-friendly is selected"
 if [[ $DO_MIGRATE -eq 1 ]]; then
-  say "! Migrate: fix any conflicting lines listed above by hand, or re-run with the model (drop --no-llm)"
-  [[ -f "$CLAUDE_DIR/output-styles/adhd-friendly.md" ]] || say "! Migrate: the rules point to the adhd-friendly output style. Install it with './setup.sh --format'"
+  say "! Migrate: fix any conflicting lines listed above by hand, or re-run './setup.sh' with claude installed so a model can rewrite them"
+  [[ -f "$CLAUDE_DIR/output-styles/adhd-friendly.md" ]] || say "! Migrate: the rules point to the adhd-friendly output style. Install it with './setup.sh'"
 fi
 [[ -n "$TOOLS_NOTE" ]] && say "! Tools skipped: $TOOLS_NOTE"
 [[ $DRY -eq 1 ]] && say "(dry run: nothing was written)"

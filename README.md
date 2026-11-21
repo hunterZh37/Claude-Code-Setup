@@ -1,18 +1,32 @@
-# Claude Code Setup
+# ADHD-friendly replies for Claude Code
 
-One script that turns a fresh [Claude Code](https://code.claude.com/docs/en/overview) install into a fast, readable setup. Replies lead with the answer, use glyphs, tables and bars you can read in place, and always end with what you need to do.
+Claude Code replies that lead with the answer, show status as glyphs and tables, and end with what you must do. One command sets it up.
 
-## Who it's for
+## Install
 
-* **People with ADHD**, or anyone who wants to decide fast without wading through prose.
-* **New Mac users** setting up Claude Code for the first time. Linux works for everything except the Homebrew casks.
-* **Heavy subagent users**, since the rules also shape how subagents report back.
+**Plugin** (inside Claude Code):
 
-## What a reply looks like
+```
+/plugin install adhd-friendly --marketplace hunterZh37/Claude-Code-Setup
+/adhd-friendly:setup
+```
+
+**Script** (in a terminal):
+
+```bash
+git clone https://github.com/hunterZh37/Claude-Code-Setup.git ~/Claude-Code-Setup && ~/Claude-Code-Setup/setup.sh
+```
+
+Both ask your name. The plugin shows a preview and asks once. The script shows a diff before it changes any file you wrote.
+
+> [!TIP]
+> Older Claude Code rejects `--marketplace`. Run `/plugin marketplace add hunterZh37/Claude-Code-Setup`, then `/plugin install adhd-friendly@adhd-friendly`.
+
+## Before and after
 
 You ask: "should we cache the API answers?"
 
-**Before** (default style):
+**Before** (default):
 
 ```
 Good question! There are a few ways we could approach caching here. One option
@@ -21,7 +35,7 @@ could be stale. Another would be to version the cache keys so entries are replac
 on deploy. We could also leave it as is. Let me know which you'd prefer!
 ```
 
-**After** (`adhd-friendly` style):
+**After** (`adhd-friendly`):
 
 ```
 Recommend: version the cache keys, because entries never go stale and no deploy hook is needed.
@@ -32,259 +46,126 @@ Recommend: version the cache keys, because entries never go stale and no deploy 
 | 1 h TTL        | simplest    | 5 min  | yes   |
 | Do nothing     | none        | 0      | n/a   |
 
-Say go and I start.
-
 **Actionables**
 ! Reply "go", or name another row (~10 s)
 ```
 
-A build reply looks like this:
+## What you get
 
-```
-✓ Date filter added to search results.
-
-✗ **Share link** drops the filter, fixing next
-✓ **Filter** works on desktop and mobile
-
-**Done:** filter + 3 tests
-**Check:** `npm test` 41/41 pass
-**Next:** keep the filter in share links
-
-Actionables: None
-```
-
-## Install
-
-**One line** (asks what to install):
-
-```bash
-git clone https://github.com/hunterZh37/Claude-Code-Setup.git ~/Claude-Code-Setup && ~/Claude-Code-Setup/setup.sh
-```
-
-**Manual**, picking components with flags:
-
-```bash
-git clone https://github.com/hunterZh37/Claude-Code-Setup.git
-cd Claude-Code-Setup
-./setup.sh --dry-run --format --commands --plugins   # preview, writes nothing
-./setup.sh --format --commands --plugins --name Sam
-```
-
-Needs `bash` and `python3` 3.8 or newer (macOS: `xcode-select --install`). `--tools` also needs [Homebrew](https://brew.sh).
-
-### Flags
-
-| Flag | Does |
-|---|---|
-| `--format` | Output style + core rules in `~/.claude/CLAUDE.md` |
-| `--commands` | `/worked-hours` command and its script |
-| `--plugins` | progress-bar plugin. Asks about the extras |
-| `--extra-plugins` | Also enables official `frontend-design` and `mattpocock-skills` |
-| `--rtk` | Token-saving note for Claude. Needs `rtk`, which you install |
-| `--tools` | Brewfile tools and Claude Code |
-| `--migrate` | Reformat your existing CLAUDE.md, AGENTS.md and Cursor, Copilot, Gemini or Windsurf rules. See [Migrate](#migrate-an-existing-setup) |
-| `--no-llm` | Migrate without a model: add the block, list conflicts |
-| `--project PATH` | Also migrate that project's agent files |
-| `--web` | Paste-ready text for claude.ai. See [Use it on claude.ai](#use-it-on-claudeai) |
-| `--all` | format, commands, plugins, rtk, tools and web (not migrate) |
-| `--name NAME` | Who reads the replies. Default "the user" |
-| `--yes` | Accept defaults, never prompt |
-| `--force-style` | Set `outputStyle` even if you picked another one |
-| `--dry-run` | Show every change, make none |
-
-## Components
-
-| Component | Installs | What it does |
+| Part | Where | Does |
 |---|---|---|
-| **Reply format** | `~/.claude/output-styles/adhd-friendly.md`, a block in `~/.claude/CLAUDE.md`, `outputStyle` in settings | The style sets the full reply format. The CLAUDE.md block repeats the 4 core rules, because output styles never reach subagents and CLAUDE.md does |
-| **Subagent rules** | part of the CLAUDE.md block | Subagents report with ✓ or ✗ on line 1, glyph rows, verbatim errors and Actionables. The main agent rewrites them into your format |
-| **Commands** | `~/.claude/commands/worked-hours.md`, `~/.claude/scripts/workday-hours.py` | `/worked-hours` reads every Claude Code transcript for a day, merges them into activity blocks and asks you to confirm the hours. `--prefix ~/work` counts only work projects |
-| **Plugins** | `enabledPlugins` and `extraKnownMarketplaces` in settings | [progress-bar](https://github.com/hunterZh37/progress-bar-plugin) shows live bars for subagents and long jobs in the status line and a side panel. It sets up its own status line |
-| **rtk** | `~/.claude/RTK.md`, imported from CLAUDE.md | Tells Claude that [rtk](https://github.com/rtk-ai/rtk) condenses command output, so it trusts the short form and batches commands |
-| **Migrate** | edits your existing agent files, after a diff and a yes | Removes or rewords reply-format rules that fight this format and adds the format block. See below |
-| **Web** | `~/.claude/.claude-code-setup/web/` | Three paste-ready texts for claude.ai and the desktop app, with your name filled in. The short one goes to your clipboard |
-| **Tools** | `Brewfile` | `gh`, `jq`, `ripgrep`, `fd`, `uv` and the Ghostty terminal, plus Claude Code from the [official installer](https://code.claude.com/docs/en/setup) |
+| **Output style** | `~/.claude/output-styles/adhd-friendly.md` | The full reply format, with your name |
+| **Core rules** | a marked block in `~/.claude/CLAUDE.md` | The 4 core rules, plus how subagents report. Output styles never reach subagents, `CLAUDE.md` does |
+| **Progress bars** | `~/.claude/settings.json` | Turns on [progress-bar](https://github.com/hunterZh37/progress-bar-plugin): live bars for subagents and long jobs |
+| **Migration** | your existing agent files | Rewrites reply-format rules that clash with this format. [How](#migration) |
+| **claude.ai texts** | `~/.claude/.claude-code-setup/web/` | Text to paste into claude.ai. [How](#claudeai) |
 
-### How the script stays safe
+## Safe to run
 
-* **Idempotent.** Unchanged files are skipped. A second run changes nothing.
-* **Backups.** Any file it replaces is first copied to `<file>.bak-<timestamp>`.
-* **Settings are merged.** Keys you already set are kept. `outputStyle` changes only if it is unset, you confirm, or you pass `--force-style`.
-* **CLAUDE.md is shared.** Your own text stays. The rules live between `claude-code-setup:begin` and `end` markers, and only that block is rewritten.
-* **No silent binaries.** rtk and herdr are linked, never downloaded. Claude Code installs only after you say yes.
+* **Backups:** every file it changes is copied to `<file>.bak-<timestamp>` first.
+* **Your text stays:** in `CLAUDE.md`, only the block between the `claude-code-setup` markers is rewritten.
+* **Settings merge:** your keys stay. `outputStyle` changes only if unset or you say yes.
+* **Re-runs:** a second run changes nothing and keeps your name.
+* **Nothing private:** no keys, tokens, binaries or personal history ship in this repo.
 
 ## After install
 
-Steps only you can do. The script prints them too.
+1. **Restart** Claude Code.
+2. **Check:** run `/output-style` and make sure `adhd-friendly` is selected.
+3. **Progress bars:** accept the progress-bar marketplace prompt on first start.
 
-| Step | How |
+## Migration
+
+Setup also fixes your existing rules, so they stop fighting the new format.
+
+| Changes | Never changes |
 |---|---|
-| **Sign in** | Run `claude` and follow the login prompt |
-| **GitHub** | `gh auth login` |
-| **Browser** | Install [Claude in Chrome](https://claude.ai/chrome) (optional) |
-| **rtk** | Install it, run `rtk init -g`, then `./setup.sh --rtk --format` |
-| **Plugins** | Accept the marketplace prompt on first start, or `/plugin install progress-bar@progress-bar` |
-| **Restart** | Quit and reopen Claude Code so the output style loads |
-| **Verify** | Run `/output-style` and check `adhd-friendly` is selected |
-| **claude.ai** | With `--web`, paste the copied text into Settings, Your Claude, Instructions |
-
-## Migrate an existing setup
-
-Already have rules for Claude Code or another agent? `--migrate` brings them in line with this format. Only reply-format rules change (length, headings, bullets, tables, emoji, tone, openings, endings, summaries). Project facts, commands, workflows, coding conventions and safety rules stay byte for byte.
-
-```bash
-./setup.sh --migrate --dry-run --project ~/code/my-app   # see every diff first
-./setup.sh --migrate --project ~/code/my-app
-./setup.sh --migrate --no-llm                            # no model, block + conflict list
-```
-
-**What it looks at**
+| Rules on length, headings, bullets, tables, emoji, tone, openings, endings, summaries | Project facts, commands, workflows, coding conventions, safety rules, frontmatter |
 
 | Scope | Files |
 |---|---|
 | **You** | `~/.claude/CLAUDE.md` and its `@imports`, `output-styles/`, `agents/`, `commands/` |
 | **Project** | `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.cursor/rules/`, `.github/copilot-instructions.md`, `.windsurfrules` |
 
-Project files are touched only with `--project` or when you say yes to the prompt.
+Project files change only when you run setup inside the project and say yes.
 
-**How it works**
+**How it stays exact**
 
-1. **Detect** the files above and list them.
-2. **Analyze** each one and list the format rules that clash with this format.
-3. **Rewrite.** Your own `claude -p` (no tools, nothing saved) gets the file and the format spec. It may delete or reword only the lines listed as clashing, and adds a one-line "Migrated by Claude-Code-Setup" note. Its output is pinned in `~/.claude/.claude-code-setup/migrate-<time>/` so you can diff it.
-4. **Check.** Every other line must come back once, byte for byte and in the same order, with its own line ending. Frontmatter is never touched. A clashing line may only be deleted or replaced in place by one reworded rule, and that rule may not bring in numbers, dates, names, URLs, paths or code that the old line and the format spec lack. If the model drops, moves, duplicates, edits or invents a line anywhere else, its version is rejected.
-5. **Add the block.** Claude Code files get the 4 core rules. Files for other agents get the full format as a portable markdown block, because output styles only work in Claude Code. Cursor gets a new `.cursor/rules/claude-code-setup-format.mdc`.
-6. **Confirm.** You see a unified diff per file and answer y or N (or pass `--yes`). Each changed file is backed up and `./uninstall.sh` restores it.
+1. **Find** clashing lines in each file.
+2. **Rewrite** with your own `claude -p`. It may only delete or reword those lines.
+3. **Check** that every other line comes back byte for byte, in order. Any other change rejects the rewrite.
+4. **Ask:** you see a diff per file and answer y or N.
 
-**Never sent to a model:** files that look like they hold a key, token or password, files over 200 KB and binary files. They get the block only, and the reason is printed.
+Files that look like they hold a secret, files over 200 KB and binary files are never sent to a model. Without `claude` installed, setup lists the clashing lines for you to fix by hand.
 
 **Example**
 
-Before, `CLAUDE.md`:
-
-```
-- Be friendly and use emoji to keep things fun.
-- Never use tables, write prose instead.
-- Always end with a summary of what you did.
-- Run `npm test` before every commit.
-- Never push to main without asking.
-```
-
-After:
-
-```
-- Run `npm test` before every commit.
-- Never push to main without asking.
-<!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->
-
-<!-- claude-code-setup:begin ... -->
-# Replies to Sam
-...the 4 core rules...
-<!-- claude-code-setup:end -->
+```diff
+- - Be friendly and use emoji to keep things fun.
+- - Never use tables, write prose instead.
+- - Always end with a summary of what you did.
+  - Run `npm test` before every commit.
+  - Never push to main without asking.
++ <!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->
++ <!-- claude-code-setup:begin -->
++ # Replies to Sam
++ ...the 4 core rules...
++ <!-- claude-code-setup:end -->
 ```
 
-With `--no-llm` the file keeps all five lines, gets the block, and the run prints the three clashing lines for you to fix:
+## claude.ai
 
-```
-! 3 format rule(s) conflict with the new format. Resolve them by hand:
-  ~/.claude/CLAUDE.md:1: - Be friendly and use emoji to keep things fun.
-      (the target uses plain glyphs (✓ ✗ ! … ○), never emoji)
-```
+> [!NOTE]
+> Only for Claude on the web (claude.ai) and in the desktop app chat. Claude Code does not need this.
 
-## Install as a plugin
+claude.ai settings have no API, so setup only writes the text and copies the short one to your clipboard. You paste it.
 
-The repo is also a Claude Code plugin marketplace. Inside Claude Code:
-
-```
-/plugin marketplace add hunterZh37/Claude-Code-Setup
-/plugin install answer-first@answer-first-plugins
-```
-
-Or in one step (Claude Code 2.1.275 or later): `/plugin install answer-first --marketplace hunterZh37/Claude-Code-Setup`. From a shell: `claude plugin marketplace add hunterZh37/Claude-Code-Setup` then `claude plugin install answer-first@answer-first-plugins`.
-
-| You get | How to use it |
-|---|---|
-| **Output style** `answer-first` | pick it with `/output-style`. It says "the user" since a plugin can't ask your name |
-| **`/answer-first:setup-format`** | adds your name, the CLAUDE.md core rules and the `outputStyle` setting. It shows a preview with diffs and asks before writing, using the same installer, backups and undo as `./setup.sh --format` |
-| **`/answer-first:setup-web`** | prints the claude.ai texts to paste |
-| **`/answer-first:worked-hours`** | today's hours from your transcripts |
-
-A plugin can ship output styles and commands, but it can't edit your `CLAUDE.md` or settings by itself, which is why `setup-format` exists. Subagents only see the format through `CLAUDE.md`. Remove the plugin with `claude plugin uninstall answer-first@answer-first-plugins`, and undo `setup-format` with `uninstall.sh` from the plugin's folder.
-
-**Anthropic's plugin directory** is a separate, manual step for the maintainer. It needs a paid claude.ai plan, a clean `claude plugin validate --strict` and an icon, and goes through the developer portal described in the [publishing docs](https://code.claude.com/docs/en/plugins/publish#submit-to-anthropics-directory).
-
-## Use it on claude.ai
-
-Claude on the web and in the desktop app can't be set up by a script. Its settings have no public API, so `./setup.sh --web` only prepares the text: it fills in your name, copies the short version to your clipboard and prints where to paste each one. It never opens a browser or signs in.
-
-| Text | Where to paste | Scope | Best for |
-|---|---|---|---|
-| `preferences.md` (about 1,000 characters) | Settings, Your Claude, the Instructions box | every chat | always on, the 4 core rules plus visuals |
-| `style.md` | a custom Style, from the Styles menu | chats where you pick that Style | the full format, switched on when you want it |
-| `project-instructions.md` | a Project's instructions | every chat in that Project | one project with the full format |
-
-The texts drop everything specific to Claude Code (tools, subagents, files) and keep what renders in chat: tables, bar charts in code blocks, numbered lists, the glyphs, "Your action:" and **Actionables**. Menu names on claude.ai may change. If you can't find one, look for Instructions (under Your Claude), Styles or Project instructions in its help pages.
-
-## Customize
-
-* **Your name:** re-run with `--name Sam`. The block and style are re-rendered.
-* **Rules:** edit `templates/` in this repo and re-run, or edit `~/.claude/output-styles/adhd-friendly.md` directly. Text outside the managed block in `CLAUDE.md` is never touched.
-* **Logging hours:** `/worked-hours` stops at a confirmed number. Add a Step 4 to `~/.claude/commands/worked-hours.md` to append it to a spreadsheet or doc.
-* **Optional extras:** [herdr](https://herdr.dev) is a terminal workspace for coding agents that pairs with the progress-bar panel. Install it from its site if you want it.
-
-## Compare formats (optional)
-
-`bench/` is an A/B harness that runs the same 12 coding tasks with Claude Code's default replies and with this format, then counts words before the answer and before your action. It uses your own `claude` login. See [bench/README.md](bench/README.md). No results are published yet.
+| File | Paste into | Applies to |
+|---|---|---|
+| `preferences.md` | Settings → Your Claude → Instructions | every chat |
+| `style.md` | a custom Style (Styles menu) | chats with that Style on |
+| `project-instructions.md` | a Project's instructions | that Project |
 
 ## Uninstall
 
 ```bash
-./uninstall.sh --dry-run   # preview
-./uninstall.sh
+~/Claude-Code-Setup/uninstall.sh
 ```
 
-It restores every file setup replaced from its backup, deletes files setup created, removes the CLAUDE.md block and removes only the settings keys setup added (if you changed one since, it is left alone). Backups are kept.
+Plugin install: ask Claude to run `uninstall.sh` from the plugin's folder, then `/plugin uninstall adhd-friendly@adhd-friendly`.
 
-## Tests
+Restores every backed-up file, removes what setup added and keeps any settings key you changed since.
 
-```bash
-tests/run-tests.sh
-```
-
-Runs setup, migrate and uninstall against throwaway `HOME` folders, with a fake `claude` for the model step, so it never calls a model. Parts: `core` (install, re-run, uninstall, hours script), `migrate`, `stress` (no python or brew, Linux, zsh, spaces and unicode in paths, symlinks, read-only files, interrupts, broken settings, CRLF, duplicate blocks) and `bench` (the harness, stubbed). `tests/run-tests.sh migrate` runs one part. It runs `shellcheck` when installed.
-
-**Known limits:** a path containing a tab breaks the uninstall record. `--prefix` in the hours script matches folder names, so `~/my-app` also counts `~/my/app`. The interactive tests need macOS `script` and are skipped elsewhere.
-
-## Why the format looks like this
-
-The rules come from a review of perception, decision and instruction-following research. Short version:
+<details>
+<summary><b>Why the format looks like this</b> (research)</summary>
 
 | Rule | Basis | Source |
 |---|---|---|
 | **Answer and a pick first** | Defaults shift choices (d ≈ 0.68). People defer when no option clearly wins | [Jachimowicz et al. 2019](https://www.cambridge.org/core/journals/behavioural-public-policy/article/when-and-why-defaults-influence-decisions-a-metaanalysis-of-default-effects/67AF6972CC2ECA3D9B5D3B0FA7AE2F0F), [Dhar 1997](https://bear.warrington.ufl.edu/brenner/mar7588/Papers/dhar-jcr1997.pdf) |
 | **Glyph status rows** | A ✗ among ✓ is found without reading (pre-attentive pop-out) | [Cleveland and McGill, summary](https://info3312.infosci.cornell.edu/ae/graphical-perception.html) |
 | **Bars for amounts** | Length on a common scale is read more accurately than angle or area | [Cleveland and McGill, summary](https://info3312.infosci.cornell.edu/ae/graphical-perception.html) |
-| **Tables for exact values** | Tables win for exact lookup, graphs for patterns (cognitive fit) | [Vessey and Galletta 1991](https://ideas.repec.org/a/inm/orisre/v2y1991i1p63-84.html) |
-| **Read in place** | ADHD affects visuospatial working memory more than verbal, so visuals must sit beside their numbers | [Martinussen et al. 2005](https://pubmed.ncbi.nlm.nih.gov/15782085/) |
+| **Tables for exact values** | Tables win for exact lookup, graphs for patterns | [Vessey and Galletta 1991](https://ideas.repec.org/a/inm/orisre/v2y1991i1p63-84.html) |
+| **Read in place** | ADHD affects visuospatial working memory more than verbal | [Martinussen et al. 2005](https://pubmed.ncbi.nlm.nih.gov/15782085/) |
 | **Short chunks** | Working memory holds about 4 chunks | [Cowan 2001](https://pubmed.ncbi.nlm.nih.gov/11515286/) |
-| **Startable actions** | If-then plans tied to a cue help follow-through (d = 0.65), including in ADHD | [Gawrilow et al. 2011](https://www.socmot.uni-konstanz.de/sites/default/files/Gawrilow_Gollwitzer_Oettingen_Executive_Function_JSCP_2011.pdf) |
-| **Few rules, no conflicts** | Compliance drops as instructions multiply, with early ones favored | [IFScale 2025](https://arxiv.org/abs/2507.11538), [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) |
-| **Two examples** | Examples are one of the most reliable ways to steer format | [Anthropic prompting guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) |
+| **Startable actions** | If-then plans help follow-through (d = 0.65), including in ADHD | [Gawrilow et al. 2011](https://www.socmot.uni-konstanz.de/sites/default/files/Gawrilow_Gollwitzer_Oettingen_Executive_Function_JSCP_2011.pdf) |
+| **Few rules, no conflicts** | Compliance drops as instructions multiply | [IFScale 2025](https://arxiv.org/abs/2507.11538), [Lost in the Middle](https://aclanthology.org/2024.tacl-1.9/) |
+| **Two examples** | Examples reliably steer format | [Anthropic prompting guide](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices) |
 | **Rules in two places** | Output styles skip subagents, CLAUDE.md reaches them | [Output styles](https://code.claude.com/docs/en/output-styles), [Subagents](https://code.claude.com/docs/en/sub-agents) |
 
-**Evidence gap:** no study tests terminal glyphs or AI reply formats with ADHD adults. Those rules are inferred from the general research above.
+**Evidence gap:** no study tests terminal glyphs or AI reply formats with ADHD adults. Those rules are inferred from the research above.
 
-## What's not included
+</details>
 
-| Left out | Why |
-|---|---|
-| **Secrets** | No API keys, tokens, `env` or plugin config values. Sign in yourself after install |
-| **Memory, transcripts, progress files** | Personal history, not setup |
-| **Session restart helpers** | Tied to one person's terminal wrappers |
-| **Organization skills and project rules** | Specific to one workplace |
-| **Doc logging for hours** | Tied to one planner document. See Customize to add your own |
-| **Binaries** | rtk and herdr are linked to their official installers |
+<details>
+<summary><b>For contributors</b> (tests, benchmark)</summary>
 
-## License
+* **Tests:** `tests/run-tests.sh` runs setup, migrate and uninstall in throwaway `HOME` folders with a fake `claude`. `tests/run-tests.sh migrate` runs one part.
+* **Benchmark:** `bench/` runs 12 coding tasks with the default replies and with this format. See [bench/README.md](bench/README.md). No results published yet.
+* **Known limits:** a path with a tab breaks the uninstall record. Interactive tests need macOS `script`.
 
-MIT. Copyright 2026 Hunter Zhang. See [LICENSE](LICENSE).
+</details>
+
+MIT license. Copyright 2026 Hunter Zhang. See [LICENSE](LICENSE).
+
+**Actionables**
+! Run the install line above (~1 min)

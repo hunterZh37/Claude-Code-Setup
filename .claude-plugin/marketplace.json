@@ -1,12 +1,12 @@
 {
-  "name": "answer-first-plugins",
-  "description": "The answer-first reply format for Claude Code",
+  "name": "adhd-friendly",
+  "description": "The adhd-friendly reply format for Claude Code",
   "owner": { "name": "Hunter Zhang", "url": "https://github.com/hunterZh37" },
   "plugins": [
     {
-      "name": "answer-first",
+      "name": "adhd-friendly",
       "source": "./",
-      "description": "Answer-first, visual replies that end with Actionables, plus /worked-hours and setup commands"
+      "description": "ADHD-friendly, visual replies that end with Actionables, plus one setup command"
     }
   ]
 }

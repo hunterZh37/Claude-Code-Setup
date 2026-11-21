@@ -22,7 +22,7 @@ if command -v shellcheck >/dev/null 2>&1; then
 else
   echo "○ shellcheck not installed, skipped (brew install shellcheck)"
 fi
-check "python compiles" python3 -m py_compile "$REPO/lib/settings.py" "$REPO/lib/helpers.py" "$REPO/lib/migrate.py" "$REPO/templates/scripts/workday-hours.py"
+check "python compiles" python3 -m py_compile "$REPO/lib/settings.py" "$REPO/lib/helpers.py" "$REPO/lib/migrate.py"
 find "$REPO" -name __pycache__ -type d -prune -exec rm -rf {} +
 
 echo

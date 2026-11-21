@@ -13,15 +13,15 @@ for key in ("commands", "outputStyles"):
         ok = ok and path.startswith("./") and os.path.exists(os.path.join(r, path))
 sys.exit(0 if ok else 1)
 PY
-check "plugin commands call setup.sh through CLAUDE_PLUGIN_ROOT" bash -c "grep -q '\"\${CLAUDE_PLUGIN_ROOT}/setup.sh\" --format --dry-run' '$REPO/plugin/commands/setup-format.md' && grep -q '\"\${CLAUDE_PLUGIN_ROOT}/setup.sh\" --web' '$REPO/plugin/commands/setup-web.md'"
-check "plugin output style is named answer-first" bash -c "head -3 '$REPO/plugin/output-styles/answer-first.md' | grep -q '^name: answer-first'"
+check "plugin setup calls setup.sh through CLAUDE_PLUGIN_ROOT" bash -c "grep -q '\"\${CLAUDE_PLUGIN_ROOT}/setup.sh\" --format --plugins --web --migrate --dry-run' '$REPO/plugin/commands/setup.md'"
+check "plugin output style is named adhd-friendly" bash -c "head -3 '$REPO/plugin/output-styles/adhd-friendly.md' | grep -q '^name: adhd-friendly'"
 H="$WORK/h-pfmt"; mkdir -p "$H/.claude"; printf 'mine\n' >"$H/.claude/CLAUDE.md"
 out="$(HOME="$H" "$REPO/setup.sh" --format --dry-run --yes --name Sam </dev/null)"
-check "setup-format preview shows a diff and writes nothing" bash -c "grep -q '^+# Replies to Sam' <<<\"\$1\" && printf 'mine\n' | cmp -s - '$H/.claude/CLAUDE.md'" _ "$out"
+check "plugin setup preview shows a diff and writes nothing" bash -c "grep -q '^+# Replies to Sam' <<<\"\$1\" && printf 'mine\n' | cmp -s - '$H/.claude/CLAUDE.md'" _ "$out"
 if command -v claude >/dev/null 2>&1; then
   check "claude plugin validate passes" bash -c "claude plugin validate '$REPO' 2>&1 | grep -q 'Validation passed'"
   PC="$WORK/plugin-cfg"; mkdir -p "$PC"
-  check "install from the local marketplace in an isolated config" bash -c "export CLAUDE_CONFIG_DIR='$PC'; claude plugin marketplace add '$REPO' >/dev/null 2>&1 && claude plugin install answer-first@answer-first-plugins >/dev/null 2>&1 && claude plugin details answer-first 2>&1 | grep -q 'setup-format, setup-web, worked-hours'"
+  check "install from the local marketplace in an isolated config" bash -c "export CLAUDE_CONFIG_DIR='$PC'; claude plugin marketplace add '$REPO' >/dev/null 2>&1 && claude plugin install adhd-friendly@adhd-friendly >/dev/null 2>&1 && claude plugin details adhd-friendly 2>&1 | grep -q 'setup'"
 else
   echo "○ claude CLI not found, plugin validate and install skipped"
 fi

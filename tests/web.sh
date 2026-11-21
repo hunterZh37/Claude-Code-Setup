@@ -35,7 +35,7 @@ check "web: uninstall removes the rendered text" test ! -e "$W"
 check "web: uninstall leaves no files" test -z "$(find "$H" -type f -print -quit)"
 H5="$WORK/h-weball"; mkdir -p "$H5"; WALL="$WORK/weball-stubs"; mkdir -p "$WALL"
 ln -sf "$(command -v python3)" "$WALL/python3"
-for c in brew rtk; do printf '#!/bin/sh
+for c in brew; do printf '#!/bin/sh
 exit 0
 ' >"$WALL/$c"; chmod +x "$WALL/$c"; done
 printf '#!/bin/sh

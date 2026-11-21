@@ -11,7 +11,7 @@ import os
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-NAME = "the user"  # a plugin can't ask for a name at install. /answer-first:setup-format personalizes
+NAME = "the user"  # a plugin can't ask for a name at install. /adhd-friendly:setup personalizes
 
 
 def render(path):
@@ -21,12 +21,8 @@ def render(path):
 
 def outputs():
     style = render("templates/output-styles/adhd-friendly.md.tmpl")
-    style = style.replace("name: adhd-friendly\n", "name: answer-first\n", 1)
-    hours = render("templates/commands/worked-hours.md")
-    hours = hours.replace("~/.claude/scripts/workday-hours.py", "\"${CLAUDE_PLUGIN_ROOT}/templates/scripts/workday-hours.py\"")
     return {
-        "plugin/output-styles/answer-first.md": style,
-        "plugin/commands/worked-hours.md": hours,
+        "plugin/output-styles/adhd-friendly.md": style,
     }
 
 

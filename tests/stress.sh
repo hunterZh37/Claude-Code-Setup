@@ -29,7 +29,7 @@ mkdir -p "$STUB/linux"; cp "$STUB/brew/"* "$STUB/linux/"; printf '#!/bin/sh\nech
 : >"$WORK/brew.log"
 HOME="$WORK/h-linux" PATH="$STUB/linux:/usr/bin:/bin" "$REPO/setup.sh" --yes --tools </dev/null >/dev/null
 check "Linux: formulae only, no casks" grep -qx 'install gh jq ripgrep fd uv' "$WORK/brew.log"
-HOME="$WORK/h-linux2" PATH="$STUB/linux:/usr/bin:/bin" "$REPO/setup.sh" --yes --format --commands </dev/null >/dev/null
+HOME="$WORK/h-linux2" PATH="$STUB/linux:/usr/bin:/bin" "$REPO/setup.sh" --yes --format </dev/null >/dev/null
 check "Linux: format installs" test -f "$WORK/h-linux2/.claude/output-styles/adhd-friendly.md"
 mkdir -p "$STUB/noclaude"; ln -sf "$PY3" "$STUB/noclaude/python3"
 out="$(HOME="$WORK/h-nc" PATH="$STUB/noclaude:/usr/bin:/bin" "$REPO/setup.sh" --tools </dev/null 2>&1)"
@@ -39,9 +39,9 @@ H="$WORK/h-zsh"; mkdir -p "$H"
 check "zsh caller works" zsh -c "HOME='$H' SETUP_NO_TTY=1 '$REPO/setup.sh' --yes --format </dev/null >/dev/null"
 
 H="$WORK/my home/ünï çødé"; mkdir -p "$H"
-inst "$H" --format --commands --plugins --name "Zoë O'Neil" >/dev/null
+inst "$H" --format --plugins --name "Zoë O'Neil" >/dev/null
 check "space+unicode HOME: installs" has "$H/.claude/CLAUDE.md" "# Replies to Zoë O'Neil"
-before="$(snapshot "$H")"; inst "$H" --format --commands --plugins --name "Zoë O'Neil" >/dev/null
+before="$(snapshot "$H")"; inst "$H" --format --plugins --name "Zoë O'Neil" >/dev/null
 check "space+unicode HOME: idempotent" test "$before" = "$(snapshot "$H")"
 uninst "$H" >/dev/null
 check "space+unicode HOME: uninstall leaves no files" test "$(files_in "$H")" = 0
@@ -145,8 +145,8 @@ inst "$H" --format >/dev/null
 check "edit inside the block is replaced" bash -c "! grep -q 'Failures LAST' '$H/.claude/CLAUDE.md'"
 check "edit inside the block is backed up" bash -c "grep -l 'Failures LAST' '$H/.claude/'CLAUDE.md.bak-* >/dev/null"
 H="$WORK/h-imp"; mkdir -p "$H/.claude"; printf '# Mine\n@RTK.md\n' >"$H/.claude/CLAUDE.md"
-PATH="$WORK/bin:$PATH" inst "$H" --format --rtk >/dev/null
-check "@RTK.md outside the block is not duplicated" test "$(grep -c '@RTK.md' "$H/.claude/CLAUDE.md")" = 1
+inst "$H" --format >/dev/null
+check "user's own @RTK.md import is kept" test "$(grep -c '@RTK.md' "$H/.claude/CLAUDE.md")" = 1
 
 echo "S5. Migrate edge cases"
 H="$WORK/h-mnc"; mkdir -p "$H/.claude"; cp "$REPO/tests/fixtures/user/CLAUDE.md" "$H/.claude/"
@@ -161,12 +161,12 @@ uninst "$H" >/dev/null
 check "format + migrate: uninstall restores the original" cmp -s "$H/.claude/CLAUDE.md" "$REPO/tests/fixtures/user/CLAUDE.md"
 
 echo "S6. Uninstall edge cases"
-H="$WORK/h-part"; mkdir -p "$H"; inst "$H" --commands >/dev/null; uninst "$H" >/dev/null
+H="$WORK/h-part"; mkdir -p "$H"; inst "$H" --format >/dev/null; uninst "$H" >/dev/null
 check "partial install: uninstall leaves no files" test "$(files_in "$H")" = 0
-H="$WORK/h-medit"; mkdir -p "$H"; inst "$H" --commands >/dev/null
-echo "my tweak" >>"$H/.claude/commands/worked-hours.md"
+H="$WORK/h-medit"; mkdir -p "$H"; inst "$H" --format >/dev/null
+echo "my tweak" >>"$H/.claude/output-styles/adhd-friendly.md"
 uninst "$H" >/dev/null
-check "edited file is saved before delete" bash -c "grep -q 'my tweak' '$H/.claude/commands/'worked-hours.md.bak-uninstall-*"
+check "edited file is saved before delete" bash -c "grep -q 'my tweak' '$H/.claude/output-styles/'adhd-friendly.md.bak-uninstall-*"
 H="$WORK/h-two"; mkdir -p "$H/.claude"; printf 'orig\n' >"$H/.claude/CLAUDE.md"
 inst "$H" --format --name A >/dev/null; sleep 1; inst "$H" --format --name B >/dev/null
 check "second install with a new name updates the block" has "$H/.claude/CLAUDE.md" "# Replies to B"
@@ -180,25 +180,6 @@ H="$WORK/h-uedit"; mkdir -p "$H"; inst "$H" --plugins >/dev/null
 python3 -c "import json,sys; p=sys.argv[1]; d=json.load(open(p)); d['enabledPlugins']['progress-bar@progress-bar']=False; json.dump(d,open(p,'w'))" "$H/.claude/settings.json"
 uninst "$H" >/dev/null
 check "settings key changed by the user is left" test "$(json_get "$H/.claude/settings.json" enabledPlugins progress-bar@progress-bar)" = false
-
-echo "S7. Hours script"
-HS="$REPO/templates/scripts/workday-hours.py"
-out="$(HOME="$WORK/h-none" python3 "$HS" 2026-01-01 2>&1 || true)"
-check "no projects dir: clear message" grep -q 'No transcripts folder' <<<"$out"
-P="$WORK/h-hrs/.claude/projects/-p"; mkdir -p "$P"
-printf '%s\n' '["timestamp"]' '{"timestamp": 5}' '{"timestamp": null}' '{"timestamp": "garbage"}' '{"timestamp": "2026-03-10T23:30:00Z"}' '{"timestamp": "2026-03-10T23:45:00Z"}' '{"timestamp":' >"$P/a.jsonl"
-check "odd lines ignored, UTC day counted in UTC" bash -c "TZ=UTC HOME='$WORK/h-hrs' python3 '$HS' 2026-03-10 | grep -q 'events: 2'"
-check "day boundary: Tokyo puts it on the next day" bash -c "TZ=Asia/Tokyo HOME='$WORK/h-hrs' python3 '$HS' 2026-03-11 | grep -q 'events: 2'"
-check "day boundary: Los Angeles keeps it on the same day" bash -c "TZ=America/Los_Angeles HOME='$WORK/h-hrs' python3 '$HS' 2026-03-10 | grep -q 'events: 2'"
-check "bad date: exit 2" bash -c "HOME='$WORK/h-hrs' python3 '$HS' 2026-13-45 >/dev/null 2>&1; test \$? = 2"
-python3 -c "
-import json,sys
-with open(sys.argv[1],'w') as f:
-    for i in range(300000): f.write(json.dumps({'timestamp': '2026-03-12T10:%02d:%02dZ' % (i // 60 % 60, i % 60), 'message': {'content': 'x' * 50}}) + '\n')
-" "$P/big.jsonl"
-start=$SECONDS
-check "300k-line transcript counted" bash -c "TZ=UTC HOME='$WORK/h-hrs' python3 '$HS' 2026-03-12 | grep -q 'ACTIVE 1.00 h'"
-check "300k-line transcript under 20 s" test $((SECONDS - start)) -lt 20
 
 echo "S8. Round 2"
 H="$WORK/h-name"; mkdir -p "$H"; inst "$H" --format --name 'A&B \1 $HOME "q"' >/dev/null
@@ -222,7 +203,7 @@ check "CLAUDE.md that is a folder: run finishes" test "$rc" = 0
 check "CLAUDE.md that is a folder: skipped with a reason" grep -q 'not a regular file' <<<"$out"
 H="$WORK/h-gone"; mkdir -p "$H"; inst "$H" --plugins >/dev/null; rm "$H/.claude/settings.json"
 check "uninstall after settings.json was deleted" bash -c "HOME='$H' '$REPO/uninstall.sh' >/dev/null && test ! -e '$H/.claude/settings.json'"
-H="$WORK/h-udry"; mkdir -p "$H"; inst "$H" --format --commands --plugins >/dev/null
+H="$WORK/h-udry"; mkdir -p "$H"; inst "$H" --format --plugins >/dev/null
 before="$(snapshot "$H")"; uninst "$H" --dry-run >/dev/null
 check "uninstall --dry-run changes nothing" test "$before" = "$(snapshot "$H")"
 M="$WORK/h-mcrlf"; mkdir -p "$M/home/.claude" "$M/proj"
@@ -241,13 +222,6 @@ printf 'Deploy with token ghp_%s\nAlways end with a summary.\n' "abcdefghijklmno
 (cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$REPO/tests/fakes/claude" FAKE_CLAUDE_LOG="$WORK/sec.log" "$REPO/setup.sh" --yes --migrate --project "$M/proj" </dev/null >"$WORK/msec.log")
 check "GitHub token in a project file: never sent" test ! -s "$WORK/sec.log"
 check "GitHub token not printed" bash -c "! grep -q 'abcdefghijklmnop' '$WORK/msec.log'"
-P="$WORK/h-hrs2/cfg/projects/-Users-sam-work-x"; mkdir -p "$P"
-printf '%s\n' '{"timestamp": "2026-04-01T10:00:00Z"}' '{"timestamp": "2026-04-01T10:10:00Z"}' '{"timestamp": "2026-04-01T10:20:00Z"}' >"$P/a.jsonl"
-check "hours: CLAUDE_CONFIG_DIR respected" bash -c "TZ=UTC CLAUDE_CONFIG_DIR='$WORK/h-hrs2/cfg' python3 '$HS' 2026-04-01 | grep -q 'events: 3'"
-check "hours: prefix with trailing slash" bash -c "TZ=UTC CLAUDE_CONFIG_DIR='$WORK/h-hrs2/cfg' python3 '$HS' 2026-04-01 --prefix /Users/sam/work/ | grep -q 'events: 3'"
-check "hours: --gap 5 splits blocks" bash -c "TZ=UTC CLAUDE_CONFIG_DIR='$WORK/h-hrs2/cfg' python3 '$HS' 2026-04-01 --gap 5 | grep -q 'ACTIVE 0.00 h'"
-P2="$WORK/h-hrs2/cfg/projects/-Users-sam-workshop"; mkdir -p "$P2"; printf '%s\n' '{"timestamp": "2026-04-01T11:00:00Z"}' >"$P2/b.jsonl"
-check "hours: prefix /work does not match /workshop" bash -c "TZ=UTC CLAUDE_CONFIG_DIR='$WORK/h-hrs2/cfg' python3 '$HS' 2026-04-01 --prefix /Users/sam/work | grep -q 'events: 3'"
 
 echo "S9. Round 3"
 M="$WORK/h-alink"; mkdir -p "$M/home/.claude" "$M/proj"
@@ -271,9 +245,9 @@ check "bench --only runs just those tasks" test "$(find "$OUTO" -path '*/[AB]/*.
 if [[ "$(uname -s)" == Darwin ]] && command -v script >/dev/null 2>&1; then
   pty() { local h="$1" input="$2"; shift 2; (sleep 1; printf '%b' "$input"; sleep 5) | env -u SETUP_NO_TTY HOME="$h" script -q /dev/null "$REPO/setup.sh" "$@" >"$WORK/pty.log" 2>&1 || true; }
   H="$WORK/h-pty1"; mkdir -p "$H"
-  pty "$H" 'y\ny\nn\nn\nn\nn\nn\nSam\n'  # format, commands, plugins, rtk, tools, migrate, web, name
-  check "interactive menu: chosen parts installed" bash -c "grep -q 'Replies to Sam' '$H/.claude/CLAUDE.md' && test -f '$H/.claude/commands/worked-hours.md'"
-  check "interactive menu: declined plugins not added" bash -c "! grep -q progress-bar '$H/.claude/settings.json'"
+  pty "$H" 'Sam\n'  # the only question on a fresh HOME is the name
+  check "interactive run: asks only the name, installs everything" bash -c "grep -q 'Replies to Sam' '$H/.claude/CLAUDE.md' && test -f '$H/.claude/.claude-code-setup/web/style.md'"
+  check "interactive run: progress-bar plugin added" grep -q progress-bar "$H/.claude/settings.json"
   H="$WORK/h-pty2"; mkdir -p "$H/.claude"; echo '{"outputStyle": "Explanatory"}' >"$H/.claude/settings.json"
   pty "$H" 'y\n' --format --name Sam
   check "interactive: yes switches an existing outputStyle" test "$(json_get "$H/.claude/settings.json" outputStyle)" = '"adhd-friendly"'
@@ -291,7 +265,7 @@ check "numbered-steps rule in the CLAUDE.md core rules" has "$REPO/templates/CLA
 for f in "$REPO/setup.sh" "$REPO/uninstall.sh" "$REPO/bench/run.sh"; do
   check "$(basename "$f"): strict mode + valid syntax" bash -c "grep -q '^set -euo pipefail' '$f' && /bin/bash -n '$f'"
 done
-H="$WORK/h-nl"; mkdir -p "$H"; inst "$H" --format --commands >/dev/null
+H="$WORK/h-nl"; mkdir -p "$H"; inst "$H" --format >/dev/null
 check "installed files: LF only, newline at end" python3 - "$H/.claude" <<'PY'
 import os, sys
 for root, _, files in os.walk(sys.argv[1]):
@@ -300,17 +274,12 @@ for root, _, files in os.walk(sys.argv[1]):
         if b and (b"\r\n" in b or not b.endswith(b"\n")):
             sys.exit(f"bad line ending: {f}")
 PY
-H="$WORK/h-rtkgone"; mkdir -p "$H"; PATH="$WORK/bin:$PATH" inst "$H" --format --rtk >/dev/null
-rc=0; HOME="$H" PATH="$STUB/nobrew:/usr/bin:/bin" "$REPO/setup.sh" --yes --format --rtk </dev/null >"$WORK/rtkgone.log" 2>&1 || rc=$?
-check "rtk removed later: says rtk is missing" grep -q 'rtk is not installed' "$WORK/rtkgone.log"
-check "rtk removed later: re-run still finishes" test "$rc" = 0
-check "rtk removed later: import kept for the installed RTK.md" has "$H/.claude/CLAUDE.md" "@RTK.md"
-H="$WORK/h-all"; mkdir -p "$H"; cp "$WORK/bin/rtk" "$STUB/brew/rtk"
+H="$WORK/h-all"; mkdir -p "$H"
 rc=0; HOME="$H" PATH="$STUB/brew:/usr/bin:/bin" "$REPO/setup.sh" --yes --all </dev/null >"$WORK/all.log" 2>&1 || rc=$?
 check "--all with stubs: finishes" test "$rc" = 0
-check "--all: every part installed" bash -c "test -f '$H/.claude/RTK.md' -a -f '$H/.claude/commands/worked-hours.md' -a -f '$H/.claude/output-styles/adhd-friendly.md' && grep -q progress-bar '$H/.claude/settings.json'"
-H="$WORK/h-nobak"; mkdir -p "$H/.claude"; printf 'x\n' >"$H/.claude/RTK.md"; PATH="$WORK/bin:$PATH" inst "$H" --rtk >/dev/null
-rm -f "$H/.claude/"RTK.md.bak-*
+check "--all: every part installed" bash -c "test -f '$H/.claude/output-styles/adhd-friendly.md' && grep -q progress-bar '$H/.claude/settings.json'"
+H="$WORK/h-nobak"; mkdir -p "$H/.claude/output-styles"; printf 'x\n' >"$H/.claude/output-styles/adhd-friendly.md"; inst "$H" --format >/dev/null
+rm -f "$H/.claude/output-styles/"adhd-friendly.md.bak-*
 rc=0; out="$(uninst "$H" 2>&1)" || rc=$?
 check "missing backup: reported, uninstall finishes" bash -c "test $rc = 0" && check "missing backup: message" grep -q 'is missing, left' <<<"$out"
 H="$WORK/h-empty-home"; mkdir -p "$H"
@@ -324,8 +293,6 @@ check "LLM dry run: CLAUDE.md untouched" cmp -s "$M/home/.claude/CLAUDE.md" "$FI
 H="$WORK/h-rolink"; mkdir -p "$H/.claude" "$H/dot"; echo '{}' >"$H/dot/s.json"; chmod 444 "$H/dot/s.json"; ln -s "$H/dot/s.json" "$H/.claude/settings.json"
 check "read-only settings behind a symlink: stops before writing" bash -c "! HOME='$H' '$REPO/setup.sh' --yes --plugins --format >/dev/null 2>&1 && test ! -e '$H/.claude/output-styles'"
 chmod 644 "$H/dot/s.json"
-mkdir -p "$WORK/h-emptyproj/.claude/projects"
-check "hours: empty projects dir exits 1 with a message" bash -c "HOME='$WORK/h-emptyproj' python3 '$HS' 2026-01-01 | grep -q 'No transcript activity'; test \${PIPESTATUS[0]} = 1"
 cat >"$STUB/promptcheck" <<'PYX'
 #!/usr/bin/env python3
 import sys
@@ -402,18 +369,14 @@ check "empty AGENTS.md restored empty" test -f "$M/proj/AGENTS.md" -a ! -s "$M/p
 M="$WORK/h-blockonly"; mkdir -p "$M/home"; inst "$M/home" --format >/dev/null; : >"$WORK/bo.log"
 (cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_LOG="$WORK/bo.log" "$REPO/setup.sh" --yes --migrate </dev/null >/dev/null)
 check "file holding only our block: model not called" test ! -s "$WORK/bo.log"
-H="$WORK/h-badman"; mkdir -p "$H"; inst "$H" --commands >/dev/null
+H="$WORK/h-badman"; mkdir -p "$H"; inst "$H" --format >/dev/null
 printf 'garbage-line-without-tabs\n\tonly-path\n' >>"$H/.claude/.claude-code-setup/manifest.tsv"
 rc=0; uninst "$H" >/dev/null 2>&1 || rc=$?
-check "malformed manifest lines are skipped" bash -c "test $rc = 0 && test ! -e '$H/.claude/commands/worked-hours.md'"
+check "malformed manifest lines are skipped" bash -c "test $rc = 0 && test ! -e '$H/.claude/output-styles/adhd-friendly.md'"
 H="$WORK/h-badstate"; mkdir -p "$H"; inst "$H" --plugins >/dev/null; echo '{oops' >"$H/.claude/.claude-code-setup/settings-state.json"
 rc=0; out="$(uninst "$H" 2>&1)" || rc=$?
 check "corrupt settings record: clear error" grep -q 'not valid JSON' <<<"$out"
 check "corrupt settings record: no traceback" bash -c "! grep -q Traceback <<<\"\$1\"" _ "$out"
-P="$WORK/h-hrs3/.claude/projects/-p"; mkdir -p "$P/dir.jsonl"
-printf '%s\n' '{"timestamp": "2026-05-01T10:00:00Z"}' >"$P/ok.jsonl"; printf '%s\n' '{"timestamp": "2026-05-01T10:05:00Z"}' >"$P/locked.jsonl"; chmod 000 "$P/locked.jsonl"
-check "hours: unreadable file and *.jsonl folder are skipped" bash -c "TZ=UTC HOME='$WORK/h-hrs3' python3 '$HS' 2026-05-01 | grep -q 'events: 1'"
-chmod 644 "$P/locked.jsonl"
 H="$WORK/h-tok"; mkdir -p "$H"; inst "$H" --format --name '{{NAME}}' >/dev/null
 check "name that looks like a placeholder is kept literally" has "$H/.claude/CLAUDE.md" "# Replies to {{NAME}}"
 M="$WORK/h-many"; mkdir -p "$M/home/.claude/commands"
@@ -421,10 +384,10 @@ for i in $(seq 1 300); do printf 'Command %s.\nAlways end with a summary.\n' "$i
 start=$SECONDS; (cd "$M" && HOME="$M/home" "$REPO/setup.sh" --yes --migrate --no-llm --dry-run </dev/null >"$WORK/many.log")
 check "300 command files scanned" grep -q '! 300 format rule' "$WORK/many.log"
 check "300 command files under 20 s" test $((SECONDS - start)) -lt 20
-H="$WORK/h-relun"; mkdir -p "$H"; inst "$H" --commands >/dev/null
-check "uninstall via a relative path from another folder" bash -c "cd '$WORK' && HOME='$H' \"\$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1]))' '$REPO/uninstall.sh')\" >/dev/null && test ! -e '$H/.claude/commands/worked-hours.md'"
+H="$WORK/h-relun"; mkdir -p "$H"; inst "$H" --format >/dev/null
+check "uninstall via a relative path from another folder" bash -c "cd '$WORK' && HOME='$H' \"\$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1]))' '$REPO/uninstall.sh')\" >/dev/null && test ! -e '$H/.claude/output-styles/adhd-friendly.md'"
 if [[ -x /opt/homebrew/bin/bash ]]; then
-  check "bash 5: setup + uninstall round trip" bash -c "H='$WORK/h-b5'; mkdir -p \"\$H/.claude\"; printf 'mine\n' >\"\$H/.claude/CLAUDE.md\"; HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/setup.sh' --yes --format --commands --plugins </dev/null >/dev/null && HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/uninstall.sh' >/dev/null && printf 'mine\n' | cmp -s - \"\$H/.claude/CLAUDE.md\""
+  check "bash 5: setup + uninstall round trip" bash -c "H='$WORK/h-b5'; mkdir -p \"\$H/.claude\"; printf 'mine\n' >\"\$H/.claude/CLAUDE.md\"; HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/setup.sh' --yes --format --plugins </dev/null >/dev/null && HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/uninstall.sh' >/dev/null && printf 'mine\n' | cmp -s - \"\$H/.claude/CLAUDE.md\""
 fi
 
 echo "S13. Round 7"
@@ -443,11 +406,8 @@ H="$WORK/h-xp"; mkdir -p "$H"; inst "$H" --extra-plugins >/dev/null
 check "--extra-plugins alone also enables progress-bar" bash -c "grep -q 'progress-bar@progress-bar' '$H/.claude/settings.json' && grep -q 'frontend-design@claude-plugins-official' '$H/.claude/settings.json'"
 H="$WORK/h-fs"; mkdir -p "$H"; inst "$H" --format --force-style >/dev/null
 check "--force-style with no outputStyle set" test "$(json_get "$H/.claude/settings.json" outputStyle)" = '"adhd-friendly"'
-H="$WORK/h-fm2"; mkdir -p "$H"; inst "$H" --format --commands >/dev/null
+H="$WORK/h-fm2"; mkdir -p "$H"; inst "$H" --format >/dev/null
 check "rendered output style has its frontmatter" bash -c "head -5 '$H/.claude/output-styles/adhd-friendly.md' | grep -q '^name: adhd-friendly' && head -5 '$H/.claude/output-styles/adhd-friendly.md' | grep -q '^keep-coding-instructions: true'"
-check "rendered command has its frontmatter" bash -c "head -5 '$H/.claude/commands/worked-hours.md' | grep -q '^description:' && head -5 '$H/.claude/commands/worked-hours.md' | grep -q '^allowed-tools:'"
-mkdir -p "$WORK/shadow"; printf 'raise SystemExit("shadowed")\n' >"$WORK/shadow/json.py"
-check "hours command form (python3 -I) ignores a json.py in the cwd" bash -c "cd '$WORK/shadow' && TZ=UTC HOME='$WORK/h-hrs' python3 -I '$H/.claude/scripts/workday-hours.py' 2026-03-10 | grep -q 'events: 2'"
 H="$WORK/h-same"; mkdir -p "$H/.claude"; echo '{"outputStyle": "adhd-friendly"}' >"$H/.claude/settings.json"; inst "$H" --format >/dev/null
 check "outputStyle already ours: no settings backup" test "$(find "$H" -name 'settings.json.bak-*' | wc -l | tr -d ' ')" = 0
 M="$WORK/h-cdir"; mkdir -p "$M/home/.claude" "$M/proj/.cursor/rules"
@@ -538,10 +498,9 @@ H="$WORK/h-cfgmismatch"; mkdir -p "$H"; CLAUDE_CONFIG_DIR="$H/a" inst "$H" --for
 check "uninstall with a different CLAUDE_CONFIG_DIR finds nothing and keeps files" bash -c "CLAUDE_CONFIG_DIR='$H/b' HOME='$H' '$REPO/uninstall.sh' | grep -q 'Nothing to undo' && test -f '$H/a/CLAUDE.md'"
 H="$WORK/h-nullplug"; mkdir -p "$H/.claude"; echo '{"enabledPlugins": {"progress-bar@progress-bar": null}}' >"$H/.claude/settings.json"; inst "$H" --plugins >/dev/null
 check "plugin set to null is treated as unset" test "$(json_get "$H/.claude/settings.json" enabledPlugins progress-bar@progress-bar)" = true
-check "hours: --prefix with a literal ~" bash -c "TZ=UTC HOME='/Users/sam' CLAUDE_CONFIG_DIR='$WORK/h-hrs2/cfg' python3 '$HS' 2026-04-01 --prefix '~/work' | grep -q 'events: 3'"
 RS="$WORK/My Repos/Claude Code Setup"; mkdir -p "$RS"; (cd "$REPO" && tar cf - --exclude .git .) | (cd "$RS" && tar xf -)
 H="$WORK/h-repospace"; mkdir -p "$H"
-check "repo cloned into a path with spaces: install + uninstall" bash -c "HOME='$H' '$RS/setup.sh' --yes --format --commands --plugins </dev/null >/dev/null && HOME='$H' '$RS/uninstall.sh' >/dev/null && test -z \"\$(find '$H' -type f)\""
+check "repo cloned into a path with spaces: install + uninstall" bash -c "HOME='$H' '$RS/setup.sh' --yes --format --plugins </dev/null >/dev/null && HOME='$H' '$RS/uninstall.sh' >/dev/null && test -z \"\$(find '$H' -type f)\""
 check "Brewfile has only brew and cask lines" bash -c "! grep -vE '^(#.*|brew \"[a-z0-9-]+\" *(#.*)?|cask \"[a-z0-9-]+\" *(#.*)?|)$' '$REPO/Brewfile'"
 
 echo "S18. Round 12"

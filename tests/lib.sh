@@ -35,10 +35,7 @@ mig() { # mig dir [flags...]
   (cd "$d" && HOME="$d/home" "$REPO/setup.sh" --migrate --name Sam "$@" </dev/null)
 }
 
-# Fake rtk so the --rtk path can be tested without installing anything.
 mkdir -p "$WORK/bin"
-printf '#!/bin/sh\nexit 0\n' >"$WORK/bin/rtk"
-chmod +x "$WORK/bin/rtk"
 
 non_format_same() { # the original's non-format lines all appear, byte for byte, in order
   python3 - "$1" "$2" <<'PY'

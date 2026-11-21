@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Reformat an existing agent harness (CLAUDE.md, AGENTS.md, Cursor rules...) to the
-answer-first reply format. Called by `setup.sh --migrate`.
+adhd-friendly reply format. Called by `setup.sh --migrate`.
 
   migrate.py has-project DIR        exit 0 if DIR holds agent instruction files
   migrate.py run [options]          detect, analyze, rewrite, diff, confirm, write
@@ -526,7 +526,7 @@ def run(a):
             declined += 1
             continue
         if not ui.ask(f"Write {label}?", True if a.yes else False):
-            print("○ skipped" + ("" if ui.tty or ui.yes else " (no terminal: re-run with --yes to write)"))
+            print("○ skipped" + ("" if ui.tty or ui.yes else " (no terminal: run ./setup.sh in a terminal to review and write it, or re-run with --yes)"))
             declined += 1
             continue
         bak = "NONE"

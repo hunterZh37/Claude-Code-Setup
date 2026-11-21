@@ -1,5 +1,5 @@
 ---
-name: answer-first
+name: adhd-friendly
 description: Answer first, visual, chunked replies that end with Actionables
 keep-coding-instructions: true
 ---
