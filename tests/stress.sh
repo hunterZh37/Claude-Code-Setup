@@ -376,3 +376,53 @@ long="$(python3 -c "print('N' * 500)")"; H="$WORK/h-long"; mkdir -p "$H"; inst "
 check "500-character name works" has "$H/.claude/CLAUDE.md" "# Replies to $long"
 mkdir -p "$WORK/bench-empty"
 check "bench score on an empty folder fails clearly" bash -c "python3 '$REPO/bench/score.py' '$WORK/bench-empty' 2>&1 | grep -q 'no results'"
+
+echo "S12. Round 6"
+H="$WORK/h-slash"; mkdir -p "$H"; HOME="$H/" "$REPO/setup.sh" --yes --format </dev/null >"$WORK/slash.log"
+check "HOME with a trailing slash: installs" test -f "$H/.claude/output-styles/adhd-friendly.md"
+check "HOME with a trailing slash: paths shown with ~" grep -q 'created ~/.claude/CLAUDE.md' "$WORK/slash.log"
+check "name with a newline is rejected" bash -c "! HOME='$WORK/h-nlname' '$REPO/setup.sh' --yes --format --name \$'a\nb' >/dev/null 2>&1"
+H="$WORK/h-eq"; mkdir -p "$H" "$WORK/eqproj"; printf 'Always end with a summary.\n' >"$WORK/eqproj/AGENTS.md"
+(cd "$H" && HOME="$H" "$REPO/setup.sh" --yes --format --migrate --no-llm --name=Sam --project="$WORK/eqproj" </dev/null >/dev/null)
+check "--name=X and --project=X forms" bash -c "grep -q 'Replies to Sam' '$H/.claude/CLAUDE.md' && grep -q 'claude-code-setup:begin' '$WORK/eqproj/AGENTS.md'"
+H="$WORK/h-file"; mkdir -p "$H"; printf 'not a dir\n' >"$H/.claude"
+rc=0; out="$(inst "$H" --format 2>&1)" || rc=$?
+check "~/.claude is a file: fails" test "$rc" != 0
+check "~/.claude is a file: no traceback" bash -c "! grep -q Traceback <<<\"\$1\"" _ "$out"
+check "~/.claude is a file: left alone" bash -c "printf 'not a dir\n' | cmp -s - '$H/.claude'"
+H="$WORK/h-sdir"; mkdir -p "$H/.claude/settings.json"
+rc=0; out="$(inst "$H" --plugins 2>&1)" || rc=$?
+check "settings.json is a folder: fails" test "$rc" != 0
+check "settings.json is a folder: no traceback" bash -c "! grep -q Traceback <<<\"\$1\"" _ "$out"
+M="$WORK/h-emptyagents"; mkdir -p "$M/home/.claude" "$M/proj"; : >"$M/proj/AGENTS.md"
+(cd "$M" && HOME="$M/home" "$REPO/setup.sh" --yes --migrate --no-llm --project "$M/proj" </dev/null >/dev/null)
+check "empty AGENTS.md gets the portable block" has "$M/proj/AGENTS.md" "# Reply format"
+HOME="$M/home" "$REPO/uninstall.sh" >/dev/null
+check "empty AGENTS.md restored empty" test -f "$M/proj/AGENTS.md" -a ! -s "$M/proj/AGENTS.md"
+M="$WORK/h-blockonly"; mkdir -p "$M/home"; inst "$M/home" --format >/dev/null; : >"$WORK/bo.log"
+(cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_LOG="$WORK/bo.log" "$REPO/setup.sh" --yes --migrate </dev/null >/dev/null)
+check "file holding only our block: model not called" test ! -s "$WORK/bo.log"
+H="$WORK/h-badman"; mkdir -p "$H"; inst "$H" --commands >/dev/null
+printf 'garbage-line-without-tabs\n\tonly-path\n' >>"$H/.claude/.claude-code-setup/manifest.tsv"
+rc=0; uninst "$H" >/dev/null 2>&1 || rc=$?
+check "malformed manifest lines are skipped" bash -c "test $rc = 0 && test ! -e '$H/.claude/commands/worked-hours.md'"
+H="$WORK/h-badstate"; mkdir -p "$H"; inst "$H" --plugins >/dev/null; echo '{oops' >"$H/.claude/.claude-code-setup/settings-state.json"
+rc=0; out="$(uninst "$H" 2>&1)" || rc=$?
+check "corrupt settings record: clear error" grep -q 'not valid JSON' <<<"$out"
+check "corrupt settings record: no traceback" bash -c "! grep -q Traceback <<<\"\$1\"" _ "$out"
+P="$WORK/h-hrs3/.claude/projects/-p"; mkdir -p "$P/dir.jsonl"
+printf '%s\n' '{"timestamp": "2026-05-01T10:00:00Z"}' >"$P/ok.jsonl"; printf '%s\n' '{"timestamp": "2026-05-01T10:05:00Z"}' >"$P/locked.jsonl"; chmod 000 "$P/locked.jsonl"
+check "hours: unreadable file and *.jsonl folder are skipped" bash -c "TZ=UTC HOME='$WORK/h-hrs3' python3 '$HS' 2026-05-01 | grep -q 'events: 1'"
+chmod 644 "$P/locked.jsonl"
+H="$WORK/h-tok"; mkdir -p "$H"; inst "$H" --format --name '{{NAME}}' >/dev/null
+check "name that looks like a placeholder is kept literally" has "$H/.claude/CLAUDE.md" "# Replies to {{NAME}}"
+M="$WORK/h-many"; mkdir -p "$M/home/.claude/commands"
+for i in $(seq 1 300); do printf 'Command %s.\nAlways end with a summary.\n' "$i" >"$M/home/.claude/commands/c$i.md"; done
+start=$SECONDS; (cd "$M" && HOME="$M/home" "$REPO/setup.sh" --yes --migrate --no-llm --dry-run </dev/null >"$WORK/many.log")
+check "300 command files scanned" grep -q '! 300 format rule' "$WORK/many.log"
+check "300 command files under 20 s" test $((SECONDS - start)) -lt 20
+H="$WORK/h-relun"; mkdir -p "$H"; inst "$H" --commands >/dev/null
+check "uninstall via a relative path from another folder" bash -c "cd '$WORK' && HOME='$H' \"\$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1]))' '$REPO/uninstall.sh')\" >/dev/null && test ! -e '$H/.claude/commands/worked-hours.md'"
+if [[ -x /opt/homebrew/bin/bash ]]; then
+  check "bash 5: setup + uninstall round trip" bash -c "H='$WORK/h-b5'; mkdir -p \"\$H/.claude\"; printf 'mine\n' >\"\$H/.claude/CLAUDE.md\"; HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/setup.sh' --yes --format --commands --plugins </dev/null >/dev/null && HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/uninstall.sh' >/dev/null && printf 'mine\n' | cmp -s - \"\$H/.claude/CLAUDE.md\""
+fi

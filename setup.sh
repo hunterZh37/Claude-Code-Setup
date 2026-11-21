@@ -4,6 +4,11 @@
 # Re-run under bash if started with sh or zsh.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 set -euo pipefail
+[[ "$HOME" == / ]] || HOME="${HOME%/}"  # a trailing slash would break ~ shortening
+
+tilde() { # show a path with ~ for the home folder (literal ~, never re-expanded)
+  case "$1" in "$HOME"/*) printf '%s%s' '~' "${1#"$HOME"}" ;; *) printf '%s' "$1" ;; esac
+}
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
@@ -139,6 +144,7 @@ say "Claude config folder: $CLAUDE_DIR"
 # Check settings.json before writing anything, so a bad file stops the run cleanly.
 SETTINGS="$CLAUDE_DIR/settings.json"
 if [[ $DO_FORMAT -eq 1 || $DO_PLUGINS -eq 1 ]] && [[ -e "$SETTINGS" ]]; then
+  [[ -f "$SETTINGS" ]] || die "$SETTINGS is not a regular file. Move it aside, then re-run. Nothing was changed."
   python3 - "$SETTINGS" <<'PY' || die "$SETTINGS cannot be merged (reason above). Comments and trailing commas are not valid JSON. Fix it or move it aside, then re-run. Nothing was changed."
 import json, sys
 with open(sys.argv[1], encoding="utf-8-sig") as fh:
@@ -179,7 +185,7 @@ manifest_has() { # manifest_has path [kind]
 }
 
 place() { # place kind rendered_file dest
-  local kind="$1" src="$2" dest="$3" bak="NONE" label="${3/#$HOME/~}"
+  local kind="$1" src="$2" dest="$3" bak="NONE" label="$(tilde "$3")"
   if [[ -e "$dest" && ! -f "$dest" ]]; then
     warn "skipped $label: it is not a regular file"
     return 0
@@ -204,7 +210,7 @@ place() { # place kind rendered_file dest
   fi
   record "$kind" "$dest" "$bak" "$(helper hash "$src")"
   helper write "$src" "$dest" || die "cannot write $label"
-  if [[ "$bak" == NONE ]]; then ok "created $label"; else ok "updated $label (backup: ${bak/#$HOME/~})"; fi
+  if [[ "$bak" == NONE ]]; then ok "created $label"; else ok "updated $label (backup: $(tilde "$bak"))"; fi
 }
 
 install_template() { # install_template template dest
@@ -243,12 +249,12 @@ if [[ $DO_FORMAT -eq 1 ]]; then
     fi
   fi
   if [[ -e "$CLAUDE_DIR/CLAUDE.md" && ! -f "$CLAUDE_DIR/CLAUDE.md" ]]; then
-    warn "skipped ${CLAUDE_DIR/#$HOME/~}/CLAUDE.md: it is not a regular file"
+    warn "skipped $(tilde "$CLAUDE_DIR")/CLAUDE.md: it is not a regular file"
   elif helper is-text "$CLAUDE_DIR/CLAUDE.md"; then
     helper block-apply "$CLAUDE_DIR/CLAUDE.md" "$block" "$TMP/CLAUDE.md"
     place block "$TMP/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
   else
-    warn "skipped ${CLAUDE_DIR/#$HOME/~}/CLAUDE.md: it is not UTF-8 text"
+    warn "skipped $(tilde "$CLAUDE_DIR")/CLAUDE.md: it is not UTF-8 text"
   fi
 
   style_force=false
@@ -312,7 +318,7 @@ if [[ $DO_PLUGINS -eq 1 ]]; then
 fi
 
 if [[ ${#PATCH_ITEMS[@]} -gt 0 ]]; then
-  say ""; say "Settings (merged into ${CLAUDE_DIR/#$HOME/~}/settings.json, your keys are kept)"
+  say ""; say "Settings (merged into $(tilde "$CLAUDE_DIR")/settings.json, your keys are kept)"
   patch="$TMP/patch.json"
   { printf '{"set": ['; (IFS=,; printf '%s' "${PATCH_ITEMS[*]}"); printf ']}\n'; } >"$patch"
   dry_flag=()
@@ -326,7 +332,7 @@ if [[ ${#PATCH_ITEMS[@]} -gt 0 ]]; then
         ADD*|FORCE*) if [[ $DRY -eq 1 ]]; then say "… would set $rest"; else ok "set $rest"; fi ;;
         SAME*) skip "$rest already set" ;;
         KEEP*) [[ "$rest" == outputStyle* ]] || warn "kept your $rest" ;;
-        BACKUP*) ok "backup: ${rest/#$HOME/~}" ;;
+        BACKUP*) ok "backup: $(tilde "$rest")" ;;
         *) say "$line" ;;
       esac
     done

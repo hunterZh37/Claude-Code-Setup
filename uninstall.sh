@@ -6,6 +6,11 @@
 # Re-run under bash if started with sh or zsh.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 set -euo pipefail
+[[ "$HOME" == / ]] || HOME="${HOME%/}"  # a trailing slash would break ~ shortening
+
+tilde() { # show a path with ~ for the home folder (literal ~, never re-expanded)
+  case "$1" in "$HOME"/*) printf '%s%s' '~' "${1#"$HOME"}" ;; *) printf '%s' "$1" ;; esac
+}
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLAUDE_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
@@ -37,7 +42,7 @@ keep_edits() { # keep_edits path installed_hash: save the file if it changed sin
   local path="$1" want="$2"
   [[ -f "$path" && -n "$want" && "$want" != "-" ]] || return 0
   if [[ "$(helper hash "$path")" != "$want" ]]; then
-    act "save your edits to ${path/#$HOME/~}.bak-uninstall-$STAMP" cp -p "$path" "$path.bak-uninstall-$STAMP"
+    act "save your edits to $(tilde "$path").bak-uninstall-$STAMP" cp -p "$path" "$path.bak-uninstall-$STAMP"
   fi
 }
 
@@ -50,7 +55,7 @@ if [[ -f "$MANIFEST" ]]; then
   while IFS=$'\t' read -r kind path bak hash; do
     [[ -n "${path:-}" ]] || continue
     hash="${hash:--}"
-    label="${path/#$HOME/~}"
+    label="$(tilde "$path")"
     case "$kind" in
       block)
         if [[ -f "$path" ]]; then
@@ -72,9 +77,9 @@ if [[ -f "$MANIFEST" ]]; then
           echo "○ left $label (it was already identical before setup)"
         elif [[ -f "$bak" ]]; then
           keep_edits "$path" "$hash"
-          act "restore $label from ${bak/#$HOME/~}" helper write "$bak" "$path"
+          act "restore $label from $(tilde "$bak")" helper write "$bak" "$path"
         else
-          echo "! backup ${bak/#$HOME/~} is missing, left $label as is"
+          echo "! backup $(tilde "$bak") is missing, left $label as is"
         fi
         ;;
     esac
@@ -96,5 +101,5 @@ if [[ -f "$STATE_DIR/settings-state.json" ]]; then
     done
 fi
 
-act "remove the setup record ${STATE_DIR/#$HOME/~}" rm -rf "$STATE_DIR"
+act "remove the setup record $(tilde "$STATE_DIR")" rm -rf "$STATE_DIR"
 echo "Backups (*.bak-*) were kept. Restart Claude Code to finish."
