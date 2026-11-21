@@ -426,3 +426,43 @@ check "uninstall via a relative path from another folder" bash -c "cd '$WORK' &&
 if [[ -x /opt/homebrew/bin/bash ]]; then
   check "bash 5: setup + uninstall round trip" bash -c "H='$WORK/h-b5'; mkdir -p \"\$H/.claude\"; printf 'mine\n' >\"\$H/.claude/CLAUDE.md\"; HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/setup.sh' --yes --format --commands --plugins </dev/null >/dev/null && HOME=\"\$H\" /opt/homebrew/bin/bash '$REPO/uninstall.sh' >/dev/null && printf 'mine\n' | cmp -s - \"\$H/.claude/CLAUDE.md\""
 fi
+
+echo "S13. Round 7"
+M="$WORK/h-mdry"; new_migrate_home "$M"; before="$(snapshot "$M")"
+mig "$M" --no-llm --yes --dry-run --project "$M/proj" >/dev/null
+check "migrate --dry-run with --project changes nothing" test "$before" = "$(snapshot "$M")"
+H="$WORK/h-fm"; mkdir -p "$H"
+(cd "$H" && HOME="$H" "$REPO/setup.sh" --yes --format --migrate --no-llm </dev/null >/dev/null)
+check "format + migrate in one fresh run: one block" test "$(grep -c 'claude-code-setup:begin' "$H/.claude/CLAUDE.md")" = 1
+uninst "$H" >/dev/null
+check "format + migrate fresh: uninstall leaves no files" test "$(files_in "$H")" = 0
+H="$WORK/h-gonblock"; mkdir -p "$H/.claude"; printf 'mine\n' >"$H/.claude/CLAUDE.md"; inst "$H" --format >/dev/null
+printf 'mine, edited\n' >"$H/.claude/CLAUDE.md"; uninst "$H" >/dev/null
+check "block removed by hand: uninstall leaves the file as is" bash -c "printf 'mine, edited\n' | cmp -s - '$H/.claude/CLAUDE.md'"
+H="$WORK/h-xp"; mkdir -p "$H"; inst "$H" --extra-plugins >/dev/null
+check "--extra-plugins alone also enables progress-bar" bash -c "grep -q 'progress-bar@progress-bar' '$H/.claude/settings.json' && grep -q 'frontend-design@claude-plugins-official' '$H/.claude/settings.json'"
+H="$WORK/h-fs"; mkdir -p "$H"; inst "$H" --format --force-style >/dev/null
+check "--force-style with no outputStyle set" test "$(json_get "$H/.claude/settings.json" outputStyle)" = '"adhd-friendly"'
+H="$WORK/h-fm2"; mkdir -p "$H"; inst "$H" --format --commands >/dev/null
+check "rendered output style has its frontmatter" bash -c "head -5 '$H/.claude/output-styles/adhd-friendly.md' | grep -q '^name: adhd-friendly' && head -5 '$H/.claude/output-styles/adhd-friendly.md' | grep -q '^keep-coding-instructions: true'"
+check "rendered command has its frontmatter" bash -c "head -5 '$H/.claude/commands/worked-hours.md' | grep -q '^description:' && head -5 '$H/.claude/commands/worked-hours.md' | grep -q '^allowed-tools:'"
+mkdir -p "$WORK/shadow"; printf 'raise SystemExit("shadowed")\n' >"$WORK/shadow/json.py"
+check "hours command form (python3 -I) ignores a json.py in the cwd" bash -c "cd '$WORK/shadow' && TZ=UTC HOME='$WORK/h-hrs' python3 -I '$H/.claude/scripts/workday-hours.py' 2026-03-10 | grep -q 'events: 2'"
+H="$WORK/h-same"; mkdir -p "$H/.claude"; echo '{"outputStyle": "adhd-friendly"}' >"$H/.claude/settings.json"; inst "$H" --format >/dev/null
+check "outputStyle already ours: no settings backup" test "$(find "$H" -name 'settings.json.bak-*' | wc -l | tr -d ' ')" = 0
+M="$WORK/h-cdir"; mkdir -p "$M/home/.claude" "$M/proj/.cursor/rules"
+(cd "$M" && HOME="$M/home" "$REPO/setup.sh" --yes --migrate --no-llm --project "$M/proj" </dev/null >/dev/null)
+check "empty .cursor/rules gets the new rule" test -f "$M/proj/.cursor/rules/claude-code-setup-format.mdc"
+HOME="$M/home" "$REPO/uninstall.sh" >/dev/null
+check "new Cursor rule removed, folder kept" bash -c "test ! -e '$M/proj/.cursor/rules/claude-code-setup-format.mdc' && test -d '$M/proj/.cursor/rules'"
+M="$WORK/h-secnollm"; mkdir -p "$M/home/.claude"; printf 'token=ghp_%s\nAlways end with a summary.\n' "abcdefghijklmnopqrstuvwxyz9876" >"$M/home/.claude/CLAUDE.md"
+(cd "$M" && HOME="$M/home" "$REPO/setup.sh" --yes --migrate --no-llm </dev/null >"$WORK/secnollm.log")
+check "secret file, no-llm: block still added locally" has "$M/home/.claude/CLAUDE.md" "claude-code-setup:begin"
+check "secret file, no-llm: secret redacted in the printed diff" bash -c "! grep -q 'abcdefghijklmnop' '$WORK/secnollm.log'"
+M="$WORK/h sp proj"; mkdir -p "$M/home/.claude" "$M/my proj"; printf 'Always end with a summary.\n' >"$M/my proj/AGENTS.md"
+(cd "$M" && HOME="$M/home" "$REPO/setup.sh" --yes --migrate --no-llm --project "$M/my proj" </dev/null >/dev/null)
+check "project path with spaces" has "$M/my proj/AGENTS.md" "claude-code-setup:begin"
+BR="$WORK/bench-emptytext"; mkdir -p "$BR/A" "$BR/B"
+printf '{"arm":"A","id":"fix-2","run":1,"model":"m","text":""}' >"$BR/A/fix-2-r1.json"; printf '{"arm":"B","id":"fix-2","run":1,"model":"m","text":null}' >"$BR/B/fix-2-r1.json"
+check "bench score handles empty replies" bash -c "python3 '$REPO/bench/score.py' '$BR' >/dev/null"
+check "bench --only with no matching task fails clearly" bash -c "'$REPO/bench/run.sh' --model x --only nope --yes --claude '$REPO/tests/fakes/bench-claude' --out '$WORK/bench-nope' 2>&1 | grep -q 'no tasks match'"

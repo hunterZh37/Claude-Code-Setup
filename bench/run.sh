@@ -44,6 +44,7 @@ OUT="${OUT:-$BENCH/results/$DATE}"
 
 ids="$(python3 -c 'import json,sys; t=json.load(open(sys.argv[1]))["tasks"]; o=sys.argv[2].split(",") if sys.argv[2] else []; print(" ".join(x["id"] for x in t if not o or x["id"] in o))' "$BENCH/prompts.json" "$ONLY")"
 n_tasks="$(wc -w <<<"$ids" | tr -d ' ')"
+[[ "$n_tasks" -gt 0 ]] || { echo "✗ no tasks match --only $ONLY (ids are in bench/prompts.json)" >&2; exit 1; }
 calls=$((n_tasks * RUNS * 2 + 2))
 if [[ $YES -eq 0 ]]; then
   read -r -p "This makes $calls real '$CLAUDE_BIN -p' calls on model $MODEL. Continue? [y/N] " ans </dev/tty || ans=""
