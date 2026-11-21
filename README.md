@@ -126,7 +126,7 @@ Steps only you can do. The script prints them too.
 | **Plugins** | Accept the marketplace prompt on first start, or `/plugin install progress-bar@progress-bar` |
 | **Restart** | Quit and reopen Claude Code so the output style loads |
 | **Verify** | Run `/output-style` and check `adhd-friendly` is selected |
-| **claude.ai** | With `--web`, paste the copied text into your profile preferences |
+| **claude.ai** | With `--web`, paste the copied text into Settings, Your Claude, Instructions |
 
 ## Migrate an existing setup
 
@@ -219,11 +219,11 @@ Claude on the web and in the desktop app can't be set up by a script. Its settin
 
 | Text | Where to paste | Scope | Best for |
 |---|---|---|---|
-| `preferences.md` (about 1,000 characters) | Settings, the profile preferences box | every chat | always on, the 4 core rules plus visuals |
+| `preferences.md` (about 1,000 characters) | Settings, Your Claude, the Instructions box | every chat | always on, the 4 core rules plus visuals |
 | `style.md` | a custom Style, from the Styles menu | chats where you pick that Style | the full format, switched on when you want it |
 | `project-instructions.md` | a Project's instructions | every chat in that Project | one project with the full format |
 
-The texts drop everything specific to Claude Code (tools, subagents, files) and keep what renders in chat: tables, bar charts in code blocks, numbered lists, the glyphs, "Your action:" and **Actionables**. Menu names on claude.ai may change. If you can't find one, look for profile preferences, Styles or Project instructions in its help pages.
+The texts drop everything specific to Claude Code (tools, subagents, files) and keep what renders in chat: tables, bar charts in code blocks, numbered lists, the glyphs, "Your action:" and **Actionables**. Menu names on claude.ai may change. If you can't find one, look for Instructions (under Your Claude), Styles or Project instructions in its help pages.
 
 ## Customize
 

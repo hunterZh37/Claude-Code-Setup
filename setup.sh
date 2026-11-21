@@ -411,7 +411,7 @@ if [[ $DO_RTK -eq 1 ]]; then
 fi
 [[ $DO_PLUGINS -eq 1 ]] && say "! Plugins: on first start, accept the progress-bar marketplace prompt, or run '/plugin install progress-bar@progress-bar'"
 if [[ "$WEB_NOTE" == 1 ]]; then
-  say "! claude.ai, every chat: open Settings, find the profile preferences box, paste (the text is on your clipboard): $(tilde "$WEB_DIR/preferences.md")"
+  say "! claude.ai, every chat: open Settings, Your Claude, the Instructions box, paste (the text is on your clipboard): $(tilde "$WEB_DIR/preferences.md")"
   say "! claude.ai, a Style you can switch on: create a custom Style from the Styles menu and paste $(tilde "$WEB_DIR/style.md")"
   say "! claude.ai, one Project: open the Project, edit its instructions, paste $(tilde "$WEB_DIR/project-instructions.md")"
   say "  (menu names on claude.ai may change. Nothing here opens a browser or signs in for you.)"

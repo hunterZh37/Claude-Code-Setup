@@ -8,7 +8,7 @@ check "web: three files rendered" bash -c "test -f '$W/preferences.md' -a -f '$W
 check "web: name filled in" bash -c "grep -q '^Sam wants to decide fast' '$W/preferences.md' && grep -q 'each step only Sam can do' '$W/style.md'"
 check "web: no template tokens left" bash -c "! grep -rq '{{' '$W'"
 check "web: preferences copied to the clipboard (stub)" cmp -s "$WORK/clipboard.txt" "$W/preferences.md"
-check "web: paste steps printed" bash -c "grep -q 'profile preferences box' '$WORK/web.log' && grep -q 'Styles menu' '$WORK/web.log' && grep -q 'Project' '$WORK/web.log'"
+check "web: paste steps printed" bash -c "grep -q 'Your Claude, the Instructions box' '$WORK/web.log' && grep -q 'Styles menu' '$WORK/web.log' && grep -q 'Project' '$WORK/web.log'"
 check "web: nothing opens a browser" bash -c "! grep -qE '\\b(open|xdg-open)\\b.*https?://' '$REPO/setup.sh'"
 long="$(python3 -c "print('Maximilian-Alexander ' * 2)")"
 H2="$WORK/h-weblong"; mkdir -p "$H2"; HOME="$H2" PATH="$WCLIP:$PATH" "$REPO/setup.sh" --yes --web --name "$long" </dev/null >/dev/null
