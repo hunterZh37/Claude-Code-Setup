@@ -543,3 +543,18 @@ RS="$WORK/My Repos/Claude Code Setup"; mkdir -p "$RS"; (cd "$REPO" && tar cf - -
 H="$WORK/h-repospace"; mkdir -p "$H"
 check "repo cloned into a path with spaces: install + uninstall" bash -c "HOME='$H' '$RS/setup.sh' --yes --format --commands --plugins </dev/null >/dev/null && HOME='$H' '$RS/uninstall.sh' >/dev/null && test -z \"\$(find '$H' -type f)\""
 check "Brewfile has only brew and cask lines" bash -c "! grep -vE '^(#.*|brew \"[a-z0-9-]+\" *(#.*)?|cask \"[a-z0-9-]+\" *(#.*)?|)$' '$REPO/Brewfile'"
+
+echo "S18. Round 12"
+for mode in smug-number smug-url smug-path smug-ident smug-name smug-date; do
+  M="$WORK/h-$mode"; new_migrate_home "$M"
+  SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=$mode mig "$M" --yes >"$WORK/$mode.log" 2>&1
+  check "in-place reword smuggling a fact ($mode): rejected" bash -c "! grep -q 'Migrated by' '$M/home/.claude/CLAUDE.md'"
+done
+H="$WORK/h-roHome"; mkdir -p "$H"; chmod 555 "$H"
+rc=0; out="$(inst "$H" --format 2>&1)" || rc=$?
+chmod 755 "$H"
+check "unwritable HOME: fails" test "$rc" != 0
+check "unwritable HOME: no traceback" bash -c "! grep -q Traceback <<<\"\$1\"" _ "$out"
+H="$WORK/h-numstyle"; mkdir -p "$H/.claude"; echo '{"outputStyle": 5}' >"$H/.claude/settings.json"
+rc=0; inst "$H" --format >/dev/null 2>&1 || rc=$?
+check "non-string outputStyle: kept, run finishes" bash -c "test $rc = 0 && grep -q '\"outputStyle\": 5' '$H/.claude/settings.json'"

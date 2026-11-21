@@ -149,7 +149,7 @@ Project files are touched only with `--project` or when you say yes to the promp
 1. **Detect** the files above and list them.
 2. **Analyze** each one and list the format rules that clash with this format.
 3. **Rewrite.** Your own `claude -p` (no tools, nothing saved) gets the file and the format spec. It may delete or reword only the lines listed as clashing, and adds a one-line "Migrated by Claude-Code-Setup" note. Its output is pinned in `~/.claude/.claude-code-setup/migrate-<time>/` so you can diff it.
-4. **Check.** Every other line must come back once, byte for byte and in the same order, with its own line ending. Frontmatter is never touched. A clashing line may only be deleted or replaced in place by one reworded rule. If the model drops, moves, duplicates, edits or invents a line anywhere else, its version is rejected.
+4. **Check.** Every other line must come back once, byte for byte and in the same order, with its own line ending. Frontmatter is never touched. A clashing line may only be deleted or replaced in place by one reworded rule, and that rule may not bring in numbers, dates, names, URLs, paths or code that the old line and the format spec lack. If the model drops, moves, duplicates, edits or invents a line anywhere else, its version is rejected.
 5. **Add the block.** Claude Code files get the 4 core rules. Files for other agents get the full format as a portable markdown block, because output styles only work in Claude Code. Cursor gets a new `.cursor/rules/claude-code-setup-format.mdc`.
 6. **Confirm.** You see a unified diff per file and answer y or N (or pass `--yes`). Each changed file is backed up and `./uninstall.sh` restores it.
 

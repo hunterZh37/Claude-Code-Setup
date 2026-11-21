@@ -79,6 +79,23 @@ if mode == "longedit":
     edit("LONGLINE", lambda ln: ln[:-1])
 if mode == "factfmt":
     kept.append("Use tables to show the Q3 revenue of 5 million.")
+SMUGGLE = {
+    "smug-number": "- Use tables for the Q3 revenue of 5 million.",
+    "smug-url": "- Use tables, see https://example.invalid/style.",
+    "smug-path": "- Use tables like the ones in docs/style/tables.md.",
+    "smug-ident": "- Use tables built with `renderGrid` from the UI kit.",
+    "smug-name": "- Use tables, and ask Priya before changing them.",
+    "smug-date": "- Use tables for options from 2026-12-01 on.",
+}
+if mode in SMUGGLE:
+    kept = []
+    for line in body.split("\n"):
+        if line.startswith("- Never use tables"):
+            kept.append(SMUGGLE[mode])
+        elif line.startswith("- ") and bad.search(line):
+            continue
+        else:
+            kept.append(line)
 if mode == "reword":
     kept = []
     for line in body.split("\n"):

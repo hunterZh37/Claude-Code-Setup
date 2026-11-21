@@ -279,7 +279,26 @@ def restore_endings(original, migrated):
     return "".join(out)
 
 
-def integrity(original, migrated):
+FACT_RES = [
+    re.compile(r"`[^`]+`"),                                   # code
+    re.compile(r"https?://\S+|www\.\S+"),                     # URLs
+    re.compile(r"\d[\d.,:/-]*"),                               # numbers, dates, versions
+    re.compile(r"(?:~|\.{1,2})?/[\w./-]+|\b[\w-]+\.[A-Za-z]{1,5}\b"),  # paths, file names
+    re.compile(r"\b[a-z]+[A-Z]\w*\b|\b\w+_\w+\b|\b\w+::\w+\b"),      # identifiers
+    re.compile(r"(?<=[a-z,;:] )[A-Z][\w'-]*"),                  # capitalized names mid-sentence
+]
+
+
+def fact_tokens(text):
+    """Things a reworded format rule has no reason to introduce: numbers, dates,
+    URLs, paths, code, identifiers and names."""
+    found = set()
+    for rx in FACT_RES:
+        found.update(m.group(0).lower().strip(".,;:!?)(") for m in rx.finditer(text))
+    return {t for t in found if t}
+
+
+def integrity(original, migrated, spec=""):
     """Problems with the model's version. Only the lines analyze() flags as
     conflicting may change: each may be deleted or replaced in place by at most
     one reworded format rule. Every other line must come back once, byte for
@@ -287,19 +306,20 @@ def integrity(original, migrated):
     from collections import Counter
     orig = original.splitlines()
     changeable = {n for n, _, _ in analyze(original)[1]}
-    want, slots, gap = [], [], 0  # slots[k] = conflict lines between want[k-1] and want[k]
+    want, slots, gap = [], [], []  # slots[k] = conflict lines between want[k-1] and want[k]
     for i, ln in enumerate(orig, 1):
         if not ln.strip() or ln.startswith(MIGRATED_NOTE):
             continue
         if i in changeable:
-            gap += 1
+            gap.append(ln)
         else:
             slots.append(gap)
             want.append(ln)
-            gap = 0
+            gap = []
     slots.append(gap)
+    spec_tokens = fact_tokens(spec)
     keep = set(want)
-    got, extra, bad_place = [], Counter(), []
+    got, extra, bad_place, smuggled = [], Counter(), [], []
     k = 0  # protected lines seen so far
     for ln in migrated.splitlines():
         if not ln.strip() or ln.startswith(MIGRATED_NOTE):
@@ -309,8 +329,11 @@ def integrity(original, migrated):
             k += 1
         elif ln in keep:
             got.append(ln)  # out of order or duplicated, reported below
-        elif FORMAT_RE.search(ln) and extra[k] < slots[k]:
+        elif FORMAT_RE.search(ln) and extra[k] < len(slots[k]):
             extra[k] += 1  # a reworded rule where a conflicting one stood
+            new = fact_tokens(ln) - fact_tokens("\n".join(slots[k])) - spec_tokens
+            if new:
+                smuggled.append(f"{ln}   (new: {', '.join(sorted(new))})")
         else:
             bad_place.append(ln)
     problems = []
@@ -322,6 +345,8 @@ def integrity(original, migrated):
     if bad_place or dup:
         added = bad_place + dup
         problems.append((f"added {len(added)} line(s) that are not format rules or not in place of one", added))
+    if smuggled:
+        problems.append((f"put new facts in {len(smuggled)} reworded rule(s)", smuggled))
     if not problems and got != want:
         problems.append(("moved non-format lines out of their order", []))
     return problems
@@ -455,7 +480,7 @@ def run(a):
                     if changes:
                         print("  Model's changes:\n" + "\n".join("    " + c for c in changes.splitlines()))
                     migrated = restore_endings(sent, migrated)
-                    problems = integrity(sent, migrated)
+                    problems = integrity(sent, migrated, spec)
                     for what, lines in problems:
                         print(f"✗ the model {what}" + (":" if lines else ""))
                         for line in lines[:20]:
