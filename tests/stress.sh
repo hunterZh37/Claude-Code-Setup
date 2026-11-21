@@ -271,7 +271,7 @@ check "bench --only runs just those tasks" test "$(find "$OUTO" -path '*/[AB]/*.
 if [[ "$(uname -s)" == Darwin ]] && command -v script >/dev/null 2>&1; then
   pty() { local h="$1" input="$2"; shift 2; (sleep 1; printf '%b' "$input"; sleep 5) | env -u SETUP_NO_TTY HOME="$h" script -q /dev/null "$REPO/setup.sh" "$@" >"$WORK/pty.log" 2>&1 || true; }
   H="$WORK/h-pty1"; mkdir -p "$H"
-  pty "$H" 'y\ny\nn\nn\nn\nn\nSam\n'
+  pty "$H" 'y\ny\nn\nn\nn\nn\nn\nSam\n'  # format, commands, plugins, rtk, tools, migrate, web, name
   check "interactive menu: chosen parts installed" bash -c "grep -q 'Replies to Sam' '$H/.claude/CLAUDE.md' && test -f '$H/.claude/commands/worked-hours.md'"
   check "interactive menu: declined plugins not added" bash -c "! grep -q progress-bar '$H/.claude/settings.json'"
   H="$WORK/h-pty2"; mkdir -p "$H/.claude"; echo '{"outputStyle": "Explanatory"}' >"$H/.claude/settings.json"

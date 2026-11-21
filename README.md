@@ -85,7 +85,8 @@ Needs `bash` and `python3` 3.8 or newer (macOS: `xcode-select --install`). `--to
 | `--migrate` | Reformat your existing CLAUDE.md, AGENTS.md and Cursor, Copilot, Gemini or Windsurf rules. See [Migrate](#migrate-an-existing-setup) |
 | `--no-llm` | Migrate without a model: add the block, list conflicts |
 | `--project PATH` | Also migrate that project's agent files |
-| `--all` | format, commands, plugins, rtk and tools (not migrate) |
+| `--web` | Paste-ready text for claude.ai. See [Use it on claude.ai](#use-it-on-claudeai) |
+| `--all` | format, commands, plugins, rtk, tools and web (not migrate) |
 | `--name NAME` | Who reads the replies. Default "the user" |
 | `--yes` | Accept defaults, never prompt |
 | `--force-style` | Set `outputStyle` even if you picked another one |
@@ -101,6 +102,7 @@ Needs `bash` and `python3` 3.8 or newer (macOS: `xcode-select --install`). `--to
 | **Plugins** | `enabledPlugins` and `extraKnownMarketplaces` in settings | [progress-bar](https://github.com/hunterZh37/progress-bar-plugin) shows live bars for subagents and long jobs in the status line and a side panel. It sets up its own status line |
 | **rtk** | `~/.claude/RTK.md`, imported from CLAUDE.md | Tells Claude that [rtk](https://github.com/rtk-ai/rtk) condenses command output, so it trusts the short form and batches commands |
 | **Migrate** | edits your existing agent files, after a diff and a yes | Removes or rewords reply-format rules that fight this format and adds the format block. See below |
+| **Web** | `~/.claude/.claude-code-setup/web/` | Three paste-ready texts for claude.ai and the desktop app, with your name filled in. The short one goes to your clipboard |
 | **Tools** | `Brewfile` | `gh`, `jq`, `ripgrep`, `fd`, `uv` and the Ghostty terminal, plus Claude Code from the [official installer](https://code.claude.com/docs/en/setup) |
 
 ### How the script stays safe
@@ -124,6 +126,7 @@ Steps only you can do. The script prints them too.
 | **Plugins** | Accept the marketplace prompt on first start, or `/plugin install progress-bar@progress-bar` |
 | **Restart** | Quit and reopen Claude Code so the output style loads |
 | **Verify** | Run `/output-style` and check `adhd-friendly` is selected |
+| **claude.ai** | With `--web`, paste the copied text into your profile preferences |
 
 ## Migrate an existing setup
 
@@ -187,6 +190,18 @@ With `--no-llm` the file keeps all five lines, gets the block, and the run print
   ~/.claude/CLAUDE.md:1: - Be friendly and use emoji to keep things fun.
       (the target uses plain glyphs (✓ ✗ ! … ○), never emoji)
 ```
+
+## Use it on claude.ai
+
+Claude on the web and in the desktop app can't be set up by a script. Its settings have no public API, so `./setup.sh --web` only prepares the text: it fills in your name, copies the short version to your clipboard and prints where to paste each one. It never opens a browser or signs in.
+
+| Text | Where to paste | Scope | Best for |
+|---|---|---|---|
+| `preferences.md` (about 1,000 characters) | Settings, the profile preferences box | every chat | always on, the 4 core rules plus visuals |
+| `style.md` | a custom Style, from the Styles menu | chats where you pick that Style | the full format, switched on when you want it |
+| `project-instructions.md` | a Project's instructions | every chat in that Project | one project with the full format |
+
+The texts drop everything specific to Claude Code (tools, subagents, files) and keep what renders in chat: tables, bar charts in code blocks, numbered lists, the glyphs, "Your action:" and **Actionables**. Menu names on claude.ai may change. If you can't find one, look for profile preferences, Styles or Project instructions in its help pages.
 
 ## Customize
 

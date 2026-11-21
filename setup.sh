@@ -30,7 +30,9 @@ Components (pick any, or none to be asked one by one):
   --tools          Brewfile tools (gh, jq, ripgrep, fd, uv, ghostty) + Claude Code
   --migrate        reformat existing CLAUDE.md, AGENTS.md, Cursor/Copilot/Gemini rules
                    to this format (shows a diff and asks before each write)
-  --all            format, commands, plugins, rtk and tools (not migrate)
+  --web            paste-ready text for claude.ai (preferences, a Style, Project
+                   instructions), copied to the clipboard. Never opens a browser
+  --all            format, commands, plugins, rtk, tools and web (not migrate)
 
 Options:
   --name NAME      who reads the replies (default: "the user")
@@ -51,7 +53,7 @@ warn() { printf '! %s\n' "$*"; }
 die()  { printf '✗ %s\n' "$*" >&2; exit 1; }
 
 # ---------- args ----------
-DO_FORMAT=0 DO_COMMANDS=0 DO_PLUGINS=0 DO_EXTRA=0 DO_RTK=0 DO_TOOLS=0 DO_MIGRATE=0
+DO_FORMAT=0 DO_COMMANDS=0 DO_PLUGINS=0 DO_EXTRA=0 DO_RTK=0 DO_TOOLS=0 DO_MIGRATE=0 DO_WEB=0
 NAME="" YES=0 DRY=0 FORCE_STYLE=0 CHOSE=0 NO_LLM=0 PROJECT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,10 +64,11 @@ while [[ $# -gt 0 ]]; do
     --rtk) DO_RTK=1; CHOSE=1 ;;
     --tools) DO_TOOLS=1; CHOSE=1 ;;
     --migrate) DO_MIGRATE=1; CHOSE=1 ;;
+    --web) DO_WEB=1; CHOSE=1 ;;
     --no-llm) NO_LLM=1 ;;
     --project) [[ $# -ge 2 ]] || die "--project needs a path"; PROJECT="$2"; shift ;;
     --project=*) PROJECT="${1#--project=}" ;;
-    --all) DO_FORMAT=1; DO_COMMANDS=1; DO_PLUGINS=1; DO_RTK=1; DO_TOOLS=1; CHOSE=1 ;;
+    --all) DO_FORMAT=1; DO_COMMANDS=1; DO_PLUGINS=1; DO_RTK=1; DO_TOOLS=1; DO_WEB=1; CHOSE=1 ;;
     --name) [[ $# -ge 2 ]] || die "--name needs a value"; NAME="$2"; shift ;;
     --name=*) NAME="${1#--name=}" ;;
     --yes|-y) YES=1 ;;
@@ -121,12 +124,13 @@ if [[ $CHOSE -eq 0 ]]; then
   ask_yn "  rtk token saving (you install rtk yourself)?" n && DO_RTK=1
   ask_yn "  CLI tools via Homebrew + Claude Code?" n && DO_TOOLS=1
   ask_yn "  Migrate your existing CLAUDE.md / AGENTS.md / Cursor rules to this format?" n && DO_MIGRATE=1
+  ask_yn "  Text to paste into claude.ai so web chats use the format too?" n && DO_WEB=1
 fi
 if [[ $DO_PLUGINS -eq 1 && $DO_EXTRA -eq 0 ]]; then
   ask_yn "  Also enable official frontend-design and mattpocock-skills plugins?" n && DO_EXTRA=1
 fi
 
-if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_COMMANDS -eq 1 || $DO_MIGRATE -eq 1 ) ]]; then
+if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_COMMANDS -eq 1 || $DO_MIGRATE -eq 1 || $DO_WEB -eq 1 ) ]]; then
   NAME="$(ask_text "Name Claude should use for you in replies and rules?" "the user")"
 fi
 NAME="${NAME:-the user}"
@@ -284,6 +288,29 @@ if [[ $DO_COMMANDS -eq 1 ]]; then
   if [[ $DRY -eq 0 && -w "$CLAUDE_DIR/scripts/workday-hours.py" ]]; then chmod +x "$CLAUDE_DIR/scripts/workday-hours.py"; fi
 fi
 
+if [[ $DO_WEB -eq 1 ]]; then
+  say ""; say "Claude on the web (claude.ai and the desktop app)"
+  WEB_DIR="$STATE_DIR/web"
+  for f in preferences style project-instructions; do
+    install_template "$REPO_DIR/web/$f.md" "$WEB_DIR/$f.md"
+  done
+  clip=""
+  for c in pbcopy wl-copy xclip; do
+    if command -v "$c" >/dev/null 2>&1; then clip="$c"; break; fi
+  done
+  if [[ $DRY -eq 1 ]]; then
+    say "… would copy the preferences text to the clipboard${clip:+ with $clip}"
+  elif [[ -n "$clip" && -f "$WEB_DIR/preferences.md" ]]; then
+    case "$clip" in
+      xclip) xclip -selection clipboard <"$WEB_DIR/preferences.md" ;;
+      *) "$clip" <"$WEB_DIR/preferences.md" ;;
+    esac && ok "preferences text copied to the clipboard"
+  else
+    warn "no clipboard tool found (pbcopy, wl-copy or xclip). Open the file and copy it by hand."
+  fi
+  WEB_NOTE=1
+fi
+
 if [[ $DO_MIGRATE -eq 1 ]]; then
   say ""; say "Migrate existing agent instructions"
   claude_bin="${SETUP_CLAUDE_BIN:-claude}"
@@ -339,6 +366,7 @@ if [[ ${#PATCH_ITEMS[@]} -gt 0 ]]; then
 fi
 
 TOOLS_NOTE=""
+WEB_NOTE="${WEB_NOTE:-0}"
 if [[ $DO_TOOLS -eq 1 ]]; then
   say ""; say "Tools"
   if command -v brew >/dev/null 2>&1; then
@@ -377,6 +405,12 @@ if [[ $DO_RTK -eq 1 ]]; then
   else say "! rtk: install from https://github.com/rtk-ai/rtk, run 'rtk init -g', then './setup.sh --rtk --format'"; fi
 fi
 [[ $DO_PLUGINS -eq 1 ]] && say "! Plugins: on first start, accept the progress-bar marketplace prompt, or run '/plugin install progress-bar@progress-bar'"
+if [[ "$WEB_NOTE" == 1 ]]; then
+  say "! claude.ai, every chat: open Settings, find the profile preferences box, paste (the text is on your clipboard): $(tilde "$WEB_DIR/preferences.md")"
+  say "! claude.ai, a Style you can switch on: create a custom Style from the Styles menu and paste $(tilde "$WEB_DIR/style.md")"
+  say "! claude.ai, one Project: open the Project, edit its instructions, paste $(tilde "$WEB_DIR/project-instructions.md")"
+  say "  (menu names on claude.ai may change. Nothing here opens a browser or signs in for you.)"
+fi
 say "! Restart Claude Code so the output style and plugins load"
 [[ $DO_FORMAT -eq 1 ]] && say "! Verify: run '/output-style' in Claude Code and check adhd-friendly is selected"
 if [[ $DO_MIGRATE -eq 1 ]]; then
