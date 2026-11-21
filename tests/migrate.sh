@@ -1,16 +1,4 @@
 # Migrate tests: no-LLM path in full, LLM path with a fake `claude`. Sourced by run-tests.sh.
-FIX="$REPO/tests/fixtures"
-FAKE="$REPO/tests/fakes/claude"
-
-new_migrate_home() { # new_migrate_home dir: user CLAUDE.md with conflicts + a project
-  rm -rf "$1"; mkdir -p "$1/home/.claude"
-  cp "$FIX/user/CLAUDE.md" "$1/home/.claude/CLAUDE.md"
-  cp -R "$FIX/project" "$1/proj"
-}
-mig() { # mig dir [flags...]
-  local d="$1"; shift
-  (cd "$d" && HOME="$d/home" "$REPO/setup.sh" --migrate --name Sam "$@" </dev/null)
-}
 non_format_same() { # the original's non-format lines all appear, byte for byte, in order
   python3 - "$1" "$2" <<'PY'
 import re, sys

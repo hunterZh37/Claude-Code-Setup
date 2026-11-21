@@ -26,7 +26,7 @@ MISSING = object()
 def load(path, default):
     if not os.path.exists(path):
         return default
-    with open(path, encoding="utf-8") as fh:
+    with open(path, encoding="utf-8-sig") as fh:  # tolerate a byte-order mark
         text = fh.read()
     if not text.strip():
         return default

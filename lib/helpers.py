@@ -64,6 +64,8 @@ def apply_block(text, block):
             out.append(text[pos:m.start()])
             if i == 0:
                 out.append(lead + managed)
+            elif m.start() > 0 and m.end() < len(text):
+                out.append(nl)  # keep the line break the dropped block sat between
             pos = m.end()
         out.append(text[pos:])
         return "".join(out)
@@ -101,8 +103,10 @@ def main(argv):
         atomic_copy(argv[2], argv[3])
     elif cmd == "is-text":
         p = argv[2]
-        if not os.path.isfile(p):
+        if not os.path.exists(p):
             return 0
+        if not os.path.isfile(p):
+            return 1
         with open(p, "rb") as fh:
             data = fh.read()
         if b"\0" in data:

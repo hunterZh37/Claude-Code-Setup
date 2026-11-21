@@ -1,8 +1,4 @@
 # Core install, re-run, uninstall and hours-script tests. Sourced by run-tests.sh.
-# Fake rtk so the --rtk path can be tested without installing anything.
-mkdir -p "$WORK/bin"
-printf '#!/bin/sh\nexit 0\n' >"$WORK/bin/rtk"
-chmod +x "$WORK/bin/rtk"
 
 echo "1. Dry run writes nothing"
 H1="$WORK/home-dry"; mkdir -p "$H1"

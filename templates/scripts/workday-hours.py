@@ -49,7 +49,8 @@ def main(argv=None):
 
     want = encode(args.prefix) if args.prefix else None
     projects = [os.path.join(root, d) for d in sorted(os.listdir(root))
-                if os.path.isdir(os.path.join(root, d)) and (want is None or d.startswith(want))]
+                if os.path.isdir(os.path.join(root, d))
+                and (want is None or d == want or d.startswith(want + "-"))]
 
     stamps = set()
     for path in (f for d in projects for f in glob.glob(os.path.join(d, "*.jsonl"))):

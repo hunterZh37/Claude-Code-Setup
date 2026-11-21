@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Set up Claude Code with an answer-first reply format, a progress panel and useful tools.
 # Safe to re-run: unchanged files are skipped and changed ones are backed up first.
+# Re-run under bash if started with sh or zsh.
+if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -137,14 +139,20 @@ say "Claude config folder: $CLAUDE_DIR"
 # Check settings.json before writing anything, so a bad file stops the run cleanly.
 SETTINGS="$CLAUDE_DIR/settings.json"
 if [[ $DO_FORMAT -eq 1 || $DO_PLUGINS -eq 1 ]] && [[ -e "$SETTINGS" ]]; then
-  python3 - "$SETTINGS" <<'PY' || die "$SETTINGS is not valid JSON (comments and trailing commas are not allowed). Fix it or move it aside, then re-run."
+  python3 - "$SETTINGS" <<'PY' || die "$SETTINGS cannot be merged (reason above). Comments and trailing commas are not valid JSON. Fix it or move it aside, then re-run. Nothing was changed."
 import json, sys
-with open(sys.argv[1]) as fh:
+with open(sys.argv[1], encoding="utf-8-sig") as fh:
     text = fh.read()
 if text.strip():
-    d = json.loads(text)
+    try:
+        d = json.loads(text)
+    except json.JSONDecodeError as e:
+        sys.exit(f"settings.json line {e.lineno}: {e.msg}")
     if not isinstance(d, dict):
-        sys.exit(1)
+        sys.exit("settings.json must hold a JSON object")
+    for k in ("enabledPlugins", "extraKnownMarketplaces"):
+        if k in d and not isinstance(d[k], dict):
+            sys.exit(f"settings.json key {k} must be an object")
 PY
   [[ $DRY -eq 1 || -w "$SETTINGS" ]] || die "$SETTINGS is read-only. Make it writable (chmod u+w) or drop --format/--plugins."
 fi
@@ -234,7 +242,9 @@ if [[ $DO_FORMAT -eq 1 ]]; then
       printf '\n@RTK.md\n' >>"$block"
     fi
   fi
-  if helper is-text "$CLAUDE_DIR/CLAUDE.md"; then
+  if [[ -e "$CLAUDE_DIR/CLAUDE.md" && ! -f "$CLAUDE_DIR/CLAUDE.md" ]]; then
+    warn "skipped ${CLAUDE_DIR/#$HOME/~}/CLAUDE.md: it is not a regular file"
+  elif helper is-text "$CLAUDE_DIR/CLAUDE.md"; then
     helper block-apply "$CLAUDE_DIR/CLAUDE.md" "$block" "$TMP/CLAUDE.md"
     place block "$TMP/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
   else
@@ -246,7 +256,7 @@ if [[ $DO_FORMAT -eq 1 ]]; then
 import json, os, sys
 p = sys.argv[1]
 try:
-    print(json.load(open(p)).get("outputStyle", "") if os.path.exists(p) else "")
+    print(json.load(open(p, encoding="utf-8-sig")).get("outputStyle", "") if os.path.exists(p) else "")
 except Exception:
     print("")
 PY

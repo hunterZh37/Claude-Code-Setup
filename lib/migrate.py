@@ -312,6 +312,13 @@ def run(a):
     files = detect_user(a.claude_dir, skip)
     if a.project:
         files += detect_project(os.path.abspath(a.project))
+    seen, unique = set(), []
+    for f in files:  # AGENTS.md is often a symlink to CLAUDE.md: handle each real file once
+        rp = os.path.realpath(f[2])
+        if rp not in seen:
+            seen.add(rp)
+            unique.append(f)
+    files = unique
 
     print("Found:")
     if not files:
@@ -348,6 +355,7 @@ def run(a):
         fmt, conflicts = analyze(text)
         secret = find_secret(text)
         new = text
+        model_noop = False  # the model found no format rule to change
         print(f"\n{label}  ({LABELS[kind]}: {len(fmt)} format line(s), {len(conflicts)} conflict(s))")
 
         if llm and fmt and kind != "portable-new":
@@ -386,8 +394,7 @@ def run(a):
                             print("○ model version rejected, block only")
                             migrated = None
                     if migrated is not None:
-                        if migrated == body and not a.dry_run:
-                            checked[os.path.realpath(path)] = sha(text)
+                        model_noop = migrated == body
                         new = migrated
                         if BLOCK_RE.search(text):
                             new = with_block(new, block_inner(text))
@@ -405,6 +412,8 @@ def run(a):
             todo_conflicts.append((label, n, line, why))
 
         if new == text:
+            if model_noop and not a.dry_run:
+                checked[os.path.realpath(path)] = sha(text)
             print("○ unchanged")
             continue
         diff = difflib.unified_diff(text.splitlines(True), new.splitlines(True),
@@ -439,6 +448,8 @@ def run(a):
         finally:
             os.remove(tmp)
         written += 1
+        if model_noop:
+            checked[os.path.realpath(path)] = sha(new)
         print(f"✓ wrote {label}" + (f" (backup: {tilde(bak)})" if bak != "NONE" else " (new file)"))
 
     if checked and not a.dry_run:

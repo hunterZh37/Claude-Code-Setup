@@ -195,6 +195,10 @@ With `--no-llm` the file keeps all five lines, gets the block, and the run print
 * **Logging hours:** `/worked-hours` stops at a confirmed number. Add a Step 4 to `~/.claude/commands/worked-hours.md` to append it to a spreadsheet or doc.
 * **Optional extras:** [herdr](https://herdr.dev) is a terminal workspace for coding agents that pairs with the progress-bar panel. Install it from its site if you want it.
 
+## Compare formats (optional)
+
+`bench/` is an A/B harness that runs the same 12 coding tasks with Claude Code's default replies and with this format, then counts words before the answer and before your action. It uses your own `claude` login. See [bench/README.md](bench/README.md). No results are published yet.
+
 ## Uninstall
 
 ```bash
@@ -210,7 +214,9 @@ It restores every file setup replaced from its backup, deletes files setup creat
 tests/run-tests.sh
 ```
 
-Runs setup, migrate and uninstall against throwaway `HOME` folders, with a fake `claude` for the model step. It checks the dry run writes nothing, files land, your settings and CLAUDE.md text survive, a re-run changes nothing, uninstall restores the original state, secrets never reach the model and the hours script counts correctly. `tests/run-tests.sh migrate` runs one part. It runs `shellcheck` when installed.
+Runs setup, migrate and uninstall against throwaway `HOME` folders, with a fake `claude` for the model step, so it never calls a model. Parts: `core` (install, re-run, uninstall, hours script), `migrate`, `stress` (no python or brew, Linux, zsh, spaces and unicode in paths, symlinks, read-only files, interrupts, broken settings, CRLF, duplicate blocks) and `bench` (the harness, stubbed). `tests/run-tests.sh migrate` runs one part. It runs `shellcheck` when installed.
+
+**Known limits:** a path containing a tab breaks the uninstall record. `--prefix` in the hours script matches folder names, so `~/my-app` also counts `~/my/app`. The interactive tests need macOS `script` and are skipped elsewhere.
 
 ## Why the format looks like this
 

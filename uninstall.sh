@@ -3,6 +3,8 @@
 # remove its block from CLAUDE.md and the settings keys it added.
 # Backups (*.bak-<timestamp>) are kept so nothing is lost. A file you edited after
 # setup is saved as <file>.bak-uninstall-<timestamp> before it is restored or deleted.
+# Re-run under bash if started with sh or zsh.
+if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
