@@ -1,6 +1,7 @@
 {
   "name": "adhd-friendly",
   "displayName": "ADHD-friendly replies",
+  "version": "1.0.0",
   "description": "An ADHD-friendly, visual reply format (glyph status rows, tables, bars, Actionables last), with one setup command for CLAUDE.md, the progress-bar plugin and claude.ai",
   "author": { "name": "Hunter Zhang", "url": "https://github.com/hunterZh37" },
   "homepage": "https://github.com/hunterZh37/Claude-Code-Setup",
