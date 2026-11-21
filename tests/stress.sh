@@ -482,3 +482,23 @@ check "outputStyle null is treated as unset: no 'kept' warning" bash -c "! grep 
 H="$WORK/h-ws"; mkdir -p "$H/.claude"; printf '  \n\n' >"$H/.claude/CLAUDE.md"
 inst "$H" --format >/dev/null; uninst "$H" >/dev/null
 check "whitespace-only CLAUDE.md restored byte for byte" bash -c "printf '  \n\n' | cmp -s - '$H/.claude/CLAUDE.md'"
+
+echo "S15. Round 9: migrate content integrity"
+for mode in reorder dupe heading code fence; do
+  M="$WORK/h-i$mode"; new_migrate_home "$M"
+  SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=$mode mig "$M" --yes >"$WORK/i$mode.log" 2>&1
+  check "model '$mode': its version rejected" bash -c "! grep -q 'Migrated by' '$M/home/.claude/CLAUDE.md'"
+  check "model '$mode': original text intact" bash -c "head -c \$(wc -c <'$FIX/user/CLAUDE.md') '$M/home/.claude/CLAUDE.md' | cmp -s - '$FIX/user/CLAUDE.md'"
+done
+M="$WORK/h-idesc"; mkdir -p "$M/home/.claude/agents"
+printf -- '---\nname: reviewer\ndescription: Gives concise reviews\ntools: Read\n---\nReview the diff.\n- Always end with a summary.\n' >"$M/home/.claude/agents/reviewer.md"
+cp "$M/home/.claude/agents/reviewer.md" "$WORK/reviewer.orig"
+(cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=desc "$REPO/setup.sh" --yes --migrate </dev/null >"$WORK/idesc.log" 2>&1)
+check "frontmatter line with a format word is protected" has "$M/home/.claude/agents/reviewer.md" "description: Gives concise reviews"
+M="$WORK/h-iok-agent"; mkdir -p "$M/home/.claude/agents"; cp "$WORK/reviewer.orig" "$M/home/.claude/agents/reviewer.md"
+(cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=ok "$REPO/setup.sh" --yes --migrate </dev/null >/dev/null 2>&1)
+check "agent file: conflicting body rule removed, frontmatter intact" bash -c "! grep -q 'Always end with a summary' '$M/home/.claude/agents/reviewer.md' && head -5 '$M/home/.claude/agents/reviewer.md' | cmp -s - <(head -5 '$WORK/reviewer.orig')"
+M="$WORK/h-icrlf"; mkdir -p "$M/home/.claude"
+python3 -c "import sys; open(sys.argv[2],'w',newline='').write(open(sys.argv[1]).read().replace('\n','\r\n'))" "$FIX/user/CLAUDE.md" "$M/home/.claude/CLAUDE.md"
+(cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=ok "$REPO/setup.sh" --yes --migrate </dev/null >/dev/null 2>&1)
+check "CRLF file migrated by the model keeps CRLF" bash -c "python3 -c \"import sys; b=open(sys.argv[1],'rb').read(); sys.exit(0 if b.count(b'\\\\n') == b.count(b'\\\\r\\\\n') else 1)\" '$M/home/.claude/CLAUDE.md'"

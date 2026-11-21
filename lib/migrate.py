@@ -210,7 +210,16 @@ def analyze(text):
         b = text.count("\n", 0, span.end()) + 1
         block_lines = set(range(a, b + 1))
     fence = False
-    for i, line in enumerate(text.splitlines(), 1):
+    lines = text.splitlines()
+    front = set()
+    if lines and lines[0].strip() == "---":  # YAML frontmatter is never a format rule
+        for j in range(1, len(lines)):
+            if lines[j].strip() == "---":
+                front = set(range(1, j + 2))
+                break
+    for i, line in enumerate(lines, 1):
+        if i in front:
+            continue
         if line.lstrip().startswith("```"):
             fence = not fence
             continue
@@ -251,23 +260,41 @@ def call_llm(claude_bin, prompt):
     return (body if body.endswith("\n") else body + "\n", changes.group(1).strip() if changes else "", out), None
 
 
-def added_lines(original, migrated):
-    """Lines the model added that are not format rules: invented content."""
-    have = set(original.splitlines())
-    return [(i, line) for i, line in enumerate(migrated.splitlines(), 1)
-            if line.strip() and line not in have and not line.startswith(MIGRATED_NOTE)
-            and not FORMAT_RE.search(line)]
+def non_format(text, keep=None):
+    """The ordered list of non-blank, non-format lines. With keep (a set of lines that
+    were non-format in the original), those lines count even if they look like format."""
+    fmt_nums = {n for n, _ in analyze(text)[0]}
+    out = []
+    for i, line in enumerate(text.splitlines(), 1):
+        if not line.strip() or line.startswith(MIGRATED_NOTE):
+            continue
+        if keep is not None:
+            if line in keep or not FORMAT_RE.search(line):
+                out.append(line)
+        elif i not in fmt_nums:
+            out.append(line)
+    return out
 
 
-def missing_lines(original, migrated):
-    """Non-format lines of the original that are not in the migrated text, verbatim."""
-    fmt_nums = {n for n, _ in analyze(original)[0]}
-    have = set(migrated.splitlines())
-    lost = []
-    for i, line in enumerate(original.splitlines(), 1):
-        if line.strip() and i not in fmt_nums and line not in have and not line.startswith(MIGRATED_NOTE):
-            lost.append((i, line))
-    return lost
+def integrity(original, migrated):
+    """Problems with the model's version: every non-format line must come back
+    exactly once, unchanged, in the same order, with nothing added."""
+    want = non_format(original)
+    got = non_format(migrated, keep=set(want))
+    if got == want:
+        return []
+    from collections import Counter
+    cw, cg = Counter(want), Counter(got)
+    problems = []
+    lost = list((cw - cg).elements())
+    added = list((cg - cw).elements())
+    if lost:
+        problems.append((f"dropped {len(lost)} non-format line(s)", lost))
+    if added:
+        problems.append((f"added {len(added)} line(s) that are not format rules", added))
+    if not lost and not added:
+        problems.append(("moved non-format lines out of their order", []))
+    return problems
 
 
 # ---------- interaction ----------
@@ -393,17 +420,14 @@ def run(a):
                     print(f"✓ model output pinned at {pin}.migrated")
                     if changes:
                         print("  Model's changes:\n" + "\n".join("    " + c for c in changes.splitlines()))
-                    lost = missing_lines(body, migrated)
-                    added = added_lines(body, migrated)
-                    if lost:
-                        print(f"✗ the model dropped {len(lost)} non-format line(s):")
-                        for n, line in lost[:20]:
-                            print(f"    {n}: {line}")
-                    if added:
-                        print(f"✗ the model added {len(added)} line(s) that are not format rules:")
-                        for n, line in added[:20]:
-                            print(f"    {n}: {line}")
-                    if lost or added:
+                    if "\r\n" in body:  # keep the file's CRLF line endings
+                        migrated = migrated.replace("\r\n", "\n").replace("\n", "\r\n")
+                    problems = integrity(body, migrated)
+                    for what, lines in problems:
+                        print(f"✗ the model {what}" + (":" if lines else ""))
+                        for line in lines[:20]:
+                            print(f"    {line}")
+                    if problems:
                         if a.yes or not ui.ask("  Use the model's version anyway?", False):
                             print("○ model version rejected, block only")
                             migrated = None

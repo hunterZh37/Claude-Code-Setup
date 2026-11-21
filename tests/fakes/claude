@@ -2,7 +2,8 @@
 """Stand-in for `claude -p` in tests. FAKE_CLAUDE_MODE picks the behavior:
 ok (drop conflicting lines, add the note), drops (also drop a non-format line),
 garbage, empty, fail, noop (return the file unchanged), adds (invents a line),
-ws (adds trailing whitespace to a kept line). Each call is logged to
+ws (adds trailing whitespace to a kept line), reorder, dupe, heading,
+code, fence, desc (other ways a model can damage non-format content). Each call is logged to
 FAKE_CLAUDE_LOG."""
 import os
 import re
@@ -37,6 +38,20 @@ if mode == "adds":
     kept.append("Deploy to https://example.invalid on Fridays.")
 if mode == "ws":
     kept = [ln + " " if "npm test" in ln else ln for ln in kept]
+if mode == "reorder":
+    a = next(i for i, ln in enumerate(kept) if "npm test" in ln)
+    b = next(i for i, ln in enumerate(kept) if "Never push" in ln)
+    kept[a], kept[b] = kept[b], kept[a]
+if mode == "dupe":
+    kept.append(next(ln for ln in kept if "Never push" in ln))
+if mode == "heading":
+    kept = ["## Workflow" if ln == "## Work" else ln for ln in kept]
+if mode == "code":
+    kept = ["make lint-all" if ln == "make lint" else ln for ln in kept]
+if mode == "fence":
+    kept = ["```"] + kept + ["```"]
+if mode == "desc":
+    kept = [ln for ln in kept if not ln.startswith("description:")]
 if mode == "drops":
     kept = [ln for ln in kept if "npm test" not in ln]
 out = "\n".join(kept).rstrip("\n") + "\n<!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->"
