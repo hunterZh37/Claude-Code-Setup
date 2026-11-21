@@ -502,3 +502,23 @@ M="$WORK/h-icrlf"; mkdir -p "$M/home/.claude"
 python3 -c "import sys; open(sys.argv[2],'w',newline='').write(open(sys.argv[1]).read().replace('\n','\r\n'))" "$FIX/user/CLAUDE.md" "$M/home/.claude/CLAUDE.md"
 (cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=ok "$REPO/setup.sh" --yes --migrate </dev/null >/dev/null 2>&1)
 check "CRLF file migrated by the model keeps CRLF" bash -c "python3 -c \"import sys; b=open(sys.argv[1],'rb').read(); sys.exit(0 if b.count(b'\\\\n') == b.count(b'\\\\r\\\\n') else 1)\" '$M/home/.claude/CLAUDE.md'"
+
+echo "S16. Round 10: break integrity()"
+for mode in lookalike zwsp indent split join fencemove block2; do
+  M="$WORK/h-a$mode"; new_migrate_home "$M"
+  SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=$mode mig "$M" --yes >"$WORK/a$mode.log" 2>&1
+  check "adversarial '$mode': rejected, original intact" bash -c "! grep -q 'Migrated by' '$M/home/.claude/CLAUDE.md' && head -c \$(wc -c <'$FIX/user/CLAUDE.md') '$M/home/.claude/CLAUDE.md' | cmp -s - '$FIX/user/CLAUDE.md'"
+done
+M="$WORK/h-afact"; new_migrate_home "$M"; printf -- '- The `users` table stores one row per account.\n' >>"$M/home/.claude/CLAUDE.md"
+SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=factword mig "$M" --yes >"$WORK/afact.log" 2>&1
+check "fact line with a format word ('table') cannot be changed" has "$M/home/.claude/CLAUDE.md" '- The `users` table stores one row per account.'
+M="$WORK/h-along"; new_migrate_home "$M"; python3 -c "import sys; open(sys.argv[1],'a').write('LONGLINE ' + 'z' * 100000 + '\n')" "$M/home/.claude/CLAUDE.md"
+SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=longedit mig "$M" --yes >/dev/null 2>&1
+check "100k-char line edited by one char: rejected" bash -c "! grep -q 'Migrated by' '$M/home/.claude/CLAUDE.md'"
+M="$WORK/h-amixed"; mkdir -p "$M/home/.claude"; printf '# Rules\r\n- Run `npm test` before every commit.\n- Never push to main without asking.\r\n- Always end with a summary.\n' >"$M/home/.claude/CLAUDE.md"
+(cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=ok "$REPO/setup.sh" --yes --migrate --name Sam </dev/null >/dev/null 2>&1)
+check "mixed endings: untouched lines keep their own ending" python3 -c "import sys; b=open(sys.argv[1],'rb').read(); sys.exit(0 if b.startswith(b'# Rules\\r\\n- Run \\x60npm test\\x60 before every commit.\\n- Never push to main without asking.\\r\\n') else 1)" "$M/home/.claude/CLAUDE.md"
+M="$WORK/h-abom"; mkdir -p "$M/home/.claude"; printf '\xef\xbb\xbf# Rules\n- Run `npm test` before every commit.\n- Always end with a summary.\n' >"$M/home/.claude/CLAUDE.md"
+(cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=ok "$REPO/setup.sh" --yes --migrate --name Sam </dev/null >"$WORK/abom.log" 2>&1)
+check "BOM file: model migration accepted" has "$M/home/.claude/CLAUDE.md" "Migrated by"
+check "BOM file: BOM kept" python3 -c "import sys; sys.exit(0 if open(sys.argv[1],'rb').read(3) == b'\\xef\\xbb\\xbf' else 1)" "$M/home/.claude/CLAUDE.md"

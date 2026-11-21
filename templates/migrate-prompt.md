@@ -25,8 +25,12 @@ Kind: {{FILE_KIND}}
      testing, safety and permission rules, tool usage, frontmatter.
 2. Keep everything else byte-for-byte. Same words, order, headings, whitespace and code
    blocks. Never fix typos, reword or reorder it.
-3. Change format rules only where they conflict with the target format, using its
-   priority order:
+3. You may change only these lines, which conflict with the target format. Every
+   other line must come back exactly as it is, even if it looks like a format rule:
+
+{{CONFLICT_LINES}}
+
+   For each of them, using the target's priority order:
    * Delete a format rule that contradicts the target (for example "end every reply
      with a summary", "never use tables", "use emoji").
    * Reword a format rule that partly fits so it agrees with the target.

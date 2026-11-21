@@ -52,6 +52,31 @@ if mode == "fence":
     kept = ["```"] + kept + ["```"]
 if mode == "desc":
     kept = [ln for ln in kept if not ln.startswith("description:")]
+def edit(match, new_line):
+    global kept
+    kept = [new_line(ln) if match in ln else ln for ln in kept]
+if mode == "lookalike":
+    edit("Never push", lambda ln: ln.replace("Never", "N\u0435ver"))
+if mode == "zwsp":
+    edit("Never push", lambda ln: ln.replace("push", "pu\u200bsh"))
+if mode == "indent":
+    edit("Never push", lambda ln: "  " + ln)
+if mode == "split":
+    i = next(i for i, ln in enumerate(kept) if "npm test" in ln)
+    kept[i:i + 1] = ["- Run `npm test`", "  before every commit."]
+if mode == "join":
+    i = next(i for i, ln in enumerate(kept) if "npm test" in ln)
+    kept[i:i + 2] = [kept[i] + " " + kept[i + 1].lstrip("- ")]
+if mode == "fencemove":
+    i = len(kept) - 1 - kept[::-1].index("```")
+    kept.insert(i - 1, kept.pop(i))
+if mode == "factword":
+    edit("table stores", lambda ln: "- The `users` table stores accounts.")
+if mode == "block2":
+    blk = ["<!-- claude-code-setup:begin (managed by setup.sh, edits inside are replaced) -->", "x", "<!-- claude-code-setup:end -->"]
+    kept = kept + blk + blk
+if mode == "longedit":
+    edit("LONGLINE", lambda ln: ln[:-1])
 if mode == "drops":
     kept = [ln for ln in kept if "npm test" not in ln]
 out = "\n".join(kept).rstrip("\n") + "\n<!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->"

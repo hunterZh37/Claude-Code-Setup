@@ -276,10 +276,31 @@ def non_format(text, keep=None):
     return out
 
 
+def restore_endings(original, migrated):
+    """Give every line the model kept its original line ending (LF, CRLF, mixed);
+    new lines get the file's most common ending."""
+    ends = {}
+    for raw in original.splitlines(True):
+        body = raw.rstrip("\r\n")
+        ends.setdefault(body, []).append(raw[len(body):] or "\n")
+    crlf = original.count("\r\n")
+    common = "\r\n" if crlf and crlf * 2 >= original.count("\n") else "\n"
+    lines = migrated.replace("\r\n", "\n").split("\n")
+    if lines and lines[-1] == "":
+        lines.pop()
+    out = []
+    for line in lines:
+        q = ends.get(line)
+        out.append(line + (q.pop(0) if q else common))
+    return "".join(out)
+
+
 def integrity(original, migrated):
     """Problems with the model's version: every non-format line must come back
     exactly once, unchanged, in the same order, with nothing added."""
-    want = non_format(original)
+    changeable = {n for n, _, _ in analyze(original)[1]}  # only conflicting format rules may change
+    want = [ln for i, ln in enumerate(original.splitlines(), 1)
+            if ln.strip() and i not in changeable and not ln.startswith(MIGRATED_NOTE)]
     got = non_format(migrated, keep=set(want))
     if got == want:
         return []
@@ -393,7 +414,7 @@ def run(a):
         model_noop = False  # the model found no format rule to change
         print(f"\n{label}  ({LABELS[kind]}: {len(fmt)} format line(s), {len(conflicts)} conflict(s))")
 
-        if llm and fmt and kind != "portable-new":
+        if llm and conflicts and kind != "portable-new":
             if secret:
                 print(f"! not sent to the model: line {secret[0]} looks like a {secret[1]}. Block only, fix conflicts by hand.")
             elif len(text.encode()) > MAX_LLM_BYTES:
@@ -403,9 +424,13 @@ def run(a):
             elif checked.get(os.path.realpath(path)) == sha(text):
                 print("○ checked before with no conflicts, model not called")
             else:
-                body = BLOCK_RE.sub("\n", text).rstrip("\n") + "\n" if BLOCK_RE.search(text) else text
+                body = BLOCK_RE.sub("\n", text).rstrip("\r\n") + "\n" if BLOCK_RE.search(text) else text
+                bom = body.startswith("\ufeff")
+                sent = body[1:] if bom else body  # the model never sees (or drops) a BOM
+                allowed = "\n".join(f"- line {n}: {ln}" for n, ln, _ in analyze(sent)[1])
                 prompt = (prompt_tmpl.replace("{{FORMAT_SPEC}}", spec).replace("{{FILE_PATH}}", label)
-                          .replace("{{FILE_KIND}}", LABELS[kind]).replace("{{FILE_CONTENT}}", body))
+                          .replace("{{FILE_KIND}}", LABELS[kind]).replace("{{CONFLICT_LINES}}", allowed)
+                          .replace("{{FILE_CONTENT}}", sent))
                 print(f"… asking {a.claude_bin} -p to reconcile the format rules")
                 res, err = call_llm(a.claude_bin, prompt)
                 if err:
@@ -420,9 +445,8 @@ def run(a):
                     print(f"✓ model output pinned at {pin}.migrated")
                     if changes:
                         print("  Model's changes:\n" + "\n".join("    " + c for c in changes.splitlines()))
-                    if "\r\n" in body:  # keep the file's CRLF line endings
-                        migrated = migrated.replace("\r\n", "\n").replace("\n", "\r\n")
-                    problems = integrity(body, migrated)
+                    migrated = restore_endings(sent, migrated)
+                    problems = integrity(sent, migrated)
                     for what, lines in problems:
                         print(f"✗ the model {what}" + (":" if lines else ""))
                         for line in lines[:20]:
@@ -432,8 +456,8 @@ def run(a):
                             print("○ model version rejected, block only")
                             migrated = None
                     if migrated is not None:
-                        model_noop = migrated == body
-                        new = migrated
+                        model_noop = migrated == sent
+                        new = ("\ufeff" if bom else "") + migrated
                         if BLOCK_RE.search(text):
                             new = with_block(new, block_inner(text))
                         conflicts = analyze(new)[1]
