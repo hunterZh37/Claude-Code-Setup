@@ -13,10 +13,10 @@ for key in ("commands", "outputStyles"):
         ok = ok and path.startswith("./") and os.path.exists(os.path.join(r, path))
 sys.exit(0 if ok else 1)
 PY
-check "plugin setup calls setup.sh through CLAUDE_PLUGIN_ROOT" bash -c "grep -q '\"\${CLAUDE_PLUGIN_ROOT}/setup.sh\" --format --plugins --web --migrate --dry-run' '$REPO/plugin/commands/setup.md'"
+check "plugin setup calls setup.sh through CLAUDE_PLUGIN_ROOT" bash -c "grep -q 'SETUP_DRY_RUN=1 SETUP_YES=1 SETUP_NAME=\"<name>\" bash \"\${CLAUDE_PLUGIN_ROOT}/setup.sh\"' '$REPO/plugin/commands/setup.md'"
 check "plugin output style is named adhd-friendly" bash -c "head -3 '$REPO/plugin/output-styles/adhd-friendly.md' | grep -q '^name: adhd-friendly'"
 H="$WORK/h-pfmt"; mkdir -p "$H/.claude"; printf 'mine\n' >"$H/.claude/CLAUDE.md"
-out="$(HOME="$H" "$REPO/setup.sh" --format --dry-run --yes --name Sam </dev/null)"
+out="$(HOME="$H" "$REPO/tests/setup-flags.sh" --format --dry-run --yes --name Sam </dev/null)"
 check "plugin setup preview shows a diff and writes nothing" bash -c "grep -q '^+# Replies to Sam' <<<\"\$1\" && printf 'mine\n' | cmp -s - '$H/.claude/CLAUDE.md'" _ "$out"
 if command -v claude >/dev/null 2>&1; then
   check "claude plugin validate passes" bash -c "claude plugin validate '$REPO' 2>&1 | grep -q 'Validation passed'"

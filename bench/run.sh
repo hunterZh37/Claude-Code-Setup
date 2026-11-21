@@ -56,11 +56,11 @@ trap 'rm -rf "$WORK"' EXIT
 mkdir -p "$OUT/A" "$OUT/B"
 
 # ---------- arm setup ----------
-# config-dir: A gets an empty config dir, B gets one filled by setup.sh --format.
+# config-dir: A gets an empty config dir, B gets one filled by setup.sh (format part only).
 # flags: both arms skip user settings and memory via --setting-sources, B gets the same
 # files at project level (.claude/output-styles, .claude/settings.json, CLAUDE.md).
 mkdir -p "$WORK/cfg-A" "$WORK/cfg-B"
-CLAUDE_CONFIG_DIR="$WORK/cfg-B" SETUP_NO_TTY=1 "$REPO/setup.sh" --yes --format --name "the user" >/dev/null
+CLAUDE_CONFIG_DIR="$WORK/cfg-B" SETUP_NO_TTY=1 SETUP_YES=1 SETUP_ONLY=format SETUP_NAME="the user" "$REPO/setup.sh" >/dev/null
 
 workspace() { # workspace arm dir: fresh fixture copy, plus B's project files in flags mode
   rm -rf "$2"; cp -R "$BENCH/fixture" "$2"

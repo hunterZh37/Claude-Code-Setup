@@ -18,12 +18,12 @@ It asks before spending anything. Calls use your own `claude` login and plan. Re
 
 | | Arm A: default | Arm B: Claude-Code-Setup |
 |---|---|---|
-| **User CLAUDE.md** | none | the managed block from `./setup.sh --format` |
+| **User CLAUDE.md** | none | the managed block that `./setup.sh` writes |
 | **Output style** | none (built-in default) | `adhd-friendly`, set as `outputStyle` |
 | **Your own config** | not loaded | not loaded |
 | **Model, tools, prompts** | same | same |
 
-**Isolation, `--isolation config-dir` (default):** each arm runs with its own empty `CLAUDE_CONFIG_DIR`. Arm B's folder is filled by `setup.sh --format` and nothing else, so your personal `~/.claude` never leaks in. If a fresh config folder asks you to log in, use the flags mode.
+**Isolation, `--isolation config-dir` (default):** each arm runs with its own empty `CLAUDE_CONFIG_DIR`. Arm B's folder is filled by setup.sh's format part and nothing else, so your personal `~/.claude` never leaks in. If a fresh config folder asks you to log in, use the flags mode.
 
 **Isolation, `--isolation flags`:** both arms pass `--setting-sources project,local`, which skips user settings. Arm B gets the same files at project level: `.claude/output-styles/adhd-friendly.md`, `.claude/settings.json` with `outputStyle`, and the block as `CLAUDE.md`.
 

@@ -32,10 +32,13 @@ new_migrate_home() { # new_migrate_home dir: user CLAUDE.md with conflicts + a p
 }
 mig() { # mig dir [flags...]
   local d="$1"; shift
-  (cd "$d" && HOME="$d/home" "$REPO/setup.sh" --migrate --name Sam "$@" </dev/null)
+  (cd "$d" && HOME="$d/home" "$REPO/tests/setup-flags.sh" --migrate --name Sam "$@" </dev/null)
 }
 
 mkdir -p "$WORK/bin"
+# Fake clipboard tools first on PATH, so a test run never overwrites your clipboard.
+for c in pbcopy wl-copy xclip; do printf '#!/bin/sh\ncat >/dev/null\n' >"$WORK/bin/$c"; chmod +x "$WORK/bin/$c"; done
+export PATH="$WORK/bin:$PATH"
 
 non_format_same() { # the original's non-format lines all appear, byte for byte, in order
   python3 - "$1" "$2" <<'PY'

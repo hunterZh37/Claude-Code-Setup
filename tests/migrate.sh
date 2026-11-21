@@ -35,7 +35,7 @@ echo "M2. No terminal and no --yes never writes"
 M="$WORK/mig2"; new_migrate_home "$M"
 mig "$M" --no-llm >"$WORK/m-notty.log"
 check "nothing written without a yes" cmp -s "$M/home/.claude/CLAUDE.md" "$FIX/user/CLAUDE.md"
-check "says how to write" grep -q 're-run with --yes' "$WORK/m-notty.log"
+check "says how to write" grep -q 'run ./setup.sh in a terminal' "$WORK/m-notty.log"
 
 echo "M3. LLM migrate with a fake claude"
 M="$WORK/mig3"; new_migrate_home "$M"; LOG="$WORK/fake.log"; : >"$LOG"

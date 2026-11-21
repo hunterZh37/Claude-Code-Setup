@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Reformat an existing agent harness (CLAUDE.md, AGENTS.md, Cursor rules...) to the
-adhd-friendly reply format. Called by `setup.sh --migrate`.
+adhd-friendly reply format. Called by setup.sh.
 
   migrate.py has-project DIR        exit 0 if DIR holds agent instruction files
   migrate.py run [options]          detect, analyze, rewrite, diff, confirm, write
 
 Only reply-format rules are in scope. Everything else is kept byte for byte:
-* --no-llm adds the managed format block and lists conflicting lines to fix by hand.
+* --mode no-llm adds the managed format block and lists conflicting lines to fix by hand.
 * LLM mode also asks the user's own `claude -p` to delete or reconcile conflicting
   format rules, then checks that every non-format line survived.
 Every write shows a unified diff first, needs a yes, makes a *.bak-<stamp> backup and
@@ -526,7 +526,7 @@ def run(a):
             declined += 1
             continue
         if not ui.ask(f"Write {label}?", True if a.yes else False):
-            print("○ skipped" + ("" if ui.tty or ui.yes else " (no terminal: run ./setup.sh in a terminal to review and write it, or re-run with --yes)"))
+            print("○ skipped" + ("" if ui.tty or ui.yes else " (no terminal: run ./setup.sh in a terminal to review and write it)"))
             declined += 1
             continue
         bak = "NONE"

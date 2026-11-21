@@ -50,69 +50,6 @@ Recommend: version the cache keys, because entries never go stale and no deploy 
 ! Reply "go", or name another row (~10 s)
 ```
 
-## What you get
-
-| Part | Where | Does |
-|---|---|---|
-| **Output style** | `~/.claude/output-styles/adhd-friendly.md` | The full reply format, with your name |
-| **Core rules** | a marked block in `~/.claude/CLAUDE.md` | The 4 core rules, plus how subagents report. Output styles never reach subagents, `CLAUDE.md` does |
-| **Progress bars** | `~/.claude/settings.json` | Turns on [progress-bar](https://github.com/hunterZh37/progress-bar-plugin): live bars for subagents and long jobs |
-| **Migration** | your existing agent files | Rewrites reply-format rules that clash with this format. [How](#migration) |
-| **claude.ai texts** | `~/.claude/.claude-code-setup/web/` | Text to paste into claude.ai. [How](#claudeai) |
-
-## Safe to run
-
-* **Backups:** every file it changes is copied to `<file>.bak-<timestamp>` first.
-* **Your text stays:** in `CLAUDE.md`, only the block between the `claude-code-setup` markers is rewritten.
-* **Settings merge:** your keys stay. `outputStyle` changes only if unset or you say yes.
-* **Re-runs:** a second run changes nothing and keeps your name.
-* **Nothing private:** no keys, tokens, binaries or personal history ship in this repo.
-
-## After install
-
-1. **Restart** Claude Code.
-2. **Check:** run `/output-style` and make sure `adhd-friendly` is selected.
-3. **Progress bars:** accept the progress-bar marketplace prompt on first start.
-
-## Migration
-
-Setup also fixes your existing rules, so they stop fighting the new format.
-
-| Changes | Never changes |
-|---|---|
-| Rules on length, headings, bullets, tables, emoji, tone, openings, endings, summaries | Project facts, commands, workflows, coding conventions, safety rules, frontmatter |
-
-| Scope | Files |
-|---|---|
-| **You** | `~/.claude/CLAUDE.md` and its `@imports`, `output-styles/`, `agents/`, `commands/` |
-| **Project** | `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.cursor/rules/`, `.github/copilot-instructions.md`, `.windsurfrules` |
-
-Project files change only when you run setup inside the project and say yes.
-
-**How it stays exact**
-
-1. **Find** clashing lines in each file.
-2. **Rewrite** with your own `claude -p`. It may only delete or reword those lines.
-3. **Check** that every other line comes back byte for byte, in order. Any other change rejects the rewrite.
-4. **Ask:** you see a diff per file and answer y or N.
-
-Files that look like they hold a secret, files over 200 KB and binary files are never sent to a model. Without `claude` installed, setup lists the clashing lines for you to fix by hand.
-
-**Example**
-
-```diff
-- - Be friendly and use emoji to keep things fun.
-- - Never use tables, write prose instead.
-- - Always end with a summary of what you did.
-  - Run `npm test` before every commit.
-  - Never push to main without asking.
-+ <!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->
-+ <!-- claude-code-setup:begin -->
-+ # Replies to Sam
-+ ...the 4 core rules...
-+ <!-- claude-code-setup:end -->
-```
-
 ## claude.ai
 
 > [!NOTE]

@@ -18,13 +18,9 @@ STATE_DIR="$CLAUDE_DIR/.claude-code-setup"
 MANIFEST="$STATE_DIR/manifest.tsv"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 DRY=0
-
-case "${1:-}" in
-  --dry-run) DRY=1 ;;
-  -h|--help) echo "Usage: ./uninstall.sh [--dry-run]"; exit 0 ;;
-  "") ;;
-  *) echo "✗ unknown option: $1" >&2; exit 1 ;;
-esac
+# uninstall.sh takes no flags. SETUP_DRY_RUN=1 is a hook for tests/, not for users.
+case "${SETUP_DRY_RUN:-}" in ""|0|false|no|off) ;; *) DRY=1 ;; esac
+[[ $# -eq 0 ]] || { echo "✗ uninstall.sh takes no options. Run it as: ./uninstall.sh" >&2; exit 1; }
 
 command -v python3 >/dev/null 2>&1 || { echo "✗ python3 is required" >&2; exit 1; }
 if [[ ! -d "$STATE_DIR" ]]; then

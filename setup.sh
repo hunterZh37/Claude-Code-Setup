@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Set up Claude Code with an adhd-friendly reply format, a progress panel and useful tools.
+# Set up Claude Code with an adhd-friendly reply format and a progress panel. Run: ./setup.sh
 # Safe to re-run: unchanged files are skipped and changed ones are backed up first.
 # Re-run under bash if started with sh or zsh.
 if [ -z "${BASH_VERSION:-}" ]; then exec bash "$0" "$@"; fi
@@ -17,37 +17,6 @@ MANIFEST="$STATE_DIR/manifest.tsv"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 PROGRESS_MARKETPLACE_REPO="hunterZh37/progress-bar-plugin"
 
-usage() {
-  cat <<'EOF'
-Usage: ./setup.sh
-
-Sets up the reply format, the progress-bar plugin and the claude.ai
-texts, and migrates your existing agent rules (with a diff and a yes per file).
-
-Flags below are for tests and the plugin commands. You do not need them.
-
-Components (pick any to install only those):
-  --format         adhd-friendly output style + core rules in ~/.claude/CLAUDE.md
-  --plugins        progress-bar plugin (status line + progress panel)
-  --extra-plugins  also enable official frontend-design and mattpocock-skills
-  --tools          Brewfile tools (gh, jq, ripgrep, fd, uv, ghostty) + Claude Code
-  --migrate        reformat existing CLAUDE.md, AGENTS.md, Cursor/Copilot/Gemini rules
-                   to this format (shows a diff and asks before each write)
-  --web            paste-ready text for claude.ai (preferences, a Style, Project
-                   instructions), copied to the clipboard. Never opens a browser
-  --all            format, plugins, tools and web (not migrate)
-
-Options:
-  --name NAME      who reads the replies (default: "the user")
-  --yes            accept defaults, never prompt
-  --force-style    set outputStyle even if you already chose another one
-  --dry-run        show what would change, change nothing
-  --no-llm         migrate without a model: add the format block, list conflicts
-  --project PATH   also migrate the agent files of this project
-  -h, --help       show this help
-EOF
-}
-
 # ---------- output helpers ----------
 say()  { printf '%s\n' "$*"; }
 ok()   { printf '✓ %s\n' "$*"; }
@@ -55,31 +24,29 @@ skip() { printf '○ %s\n' "$*"; }
 warn() { printf '! %s\n' "$*"; }
 die()  { printf '✗ %s\n' "$*" >&2; exit 1; }
 
-# ---------- args ----------
-DO_FORMAT=0 DO_PLUGINS=0 DO_EXTRA=0 DO_TOOLS=0 DO_MIGRATE=0 DO_WEB=0
-NAME="" YES=0 DRY=0 FORCE_STYLE=0 CHOSE=0 NO_LLM=0 PROJECT=""
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --format) DO_FORMAT=1; CHOSE=1 ;;
-    --plugins) DO_PLUGINS=1; CHOSE=1 ;;
-    --extra-plugins) DO_PLUGINS=1; DO_EXTRA=1; CHOSE=1 ;;
-    --tools) DO_TOOLS=1; CHOSE=1 ;;
-    --migrate) DO_MIGRATE=1; CHOSE=1 ;;
-    --web) DO_WEB=1; CHOSE=1 ;;
-    --no-llm) NO_LLM=1 ;;
-    --project) [[ $# -ge 2 ]] || die "--project needs a path"; PROJECT="$2"; shift ;;
-    --project=*) PROJECT="${1#--project=}" ;;
-    --all) DO_FORMAT=1; DO_PLUGINS=1; DO_TOOLS=1; DO_WEB=1; CHOSE=1 ;;
-    --name) [[ $# -ge 2 ]] || die "--name needs a value"; NAME="$2"; shift ;;
-    --name=*) NAME="${1#--name=}" ;;
-    --yes|-y) YES=1 ;;
-    --force-style) FORCE_STYLE=1 ;;
-    --dry-run) DRY=1 ;;
-    -h|--help) usage; exit 0 ;;
-    *) usage >&2; die "unknown option: $1" ;;
-  esac
-  shift
-done
+# ---------- options ----------
+# setup.sh takes no flags: a plain run sets up everything. The SETUP_* variables below
+# are hooks for the plugin's /adhd-friendly:setup command and for tests/, not for users.
+on() { case "${1:-}" in ""|0|false|no|off) return 1 ;; *) return 0 ;; esac; }
+[[ $# -eq 0 ]] || die "setup.sh takes no options. Run it as: ./setup.sh"
+DO_FORMAT=1 DO_PLUGINS=1 DO_MIGRATE=1 DO_WEB=1
+if [[ -n "${SETUP_ONLY:-}" ]]; then  # tests: install only these parts
+  DO_FORMAT=0 DO_PLUGINS=0 DO_MIGRATE=0 DO_WEB=0
+  read -r -a parts <<<"${SETUP_ONLY//,/ }"
+  [[ ${#parts[@]} -gt 0 ]] || die "SETUP_ONLY is empty"
+  for part in "${parts[@]}"; do
+    case "$part" in
+      format) DO_FORMAT=1 ;; plugins) DO_PLUGINS=1 ;; migrate) DO_MIGRATE=1 ;; web) DO_WEB=1 ;;
+      *) die "SETUP_ONLY: unknown part: $part" ;;
+    esac
+  done
+fi
+NAME="${SETUP_NAME:-}" PROJECT="${SETUP_PROJECT:-}"
+YES=0 DRY=0 FORCE_STYLE=0 NO_LLM=0
+on "${SETUP_YES:-}" && YES=1
+on "${SETUP_DRY_RUN:-}" && DRY=1
+on "${SETUP_FORCE_STYLE:-}" && FORCE_STYLE=1
+on "${SETUP_NO_LLM:-}" && NO_LLM=1
 
 # Prompts read from the terminal, so `curl ... | bash` style runs can still ask.
 HAVE_TTY=0
@@ -92,12 +59,6 @@ ask_yn() { # ask_yn "question" default(y|n)
   read -r -p "$q $hint " ans </dev/tty || ans=""
   ans="${ans:-$def}"
   [[ "$ans" =~ ^[Yy] ]]
-}
-
-ask_strict() { # like ask_yn but a run with no terminal and no --yes always says no
-  if [[ $YES -eq 1 ]]; then return 0; fi
-  if [[ $HAVE_TTY -eq 0 ]]; then return 1; fi
-  ask_yn "$1" "$2"
 }
 
 ask_text() { # ask_text "question" default
@@ -113,12 +74,6 @@ python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 8) else 1)' || die
 OS="$(uname -s)"
 case "$OS" in Darwin|Linux) ;; *) die "unsupported OS: $OS (macOS and Linux only)" ;; esac
 
-if [[ $CHOSE -eq 0 ]]; then
-  # The default run sets up everything and migrates existing rules. Migrate still shows
-  # a diff and asks before it changes any file you wrote.
-  DO_FORMAT=1 DO_PLUGINS=1 DO_WEB=1 DO_MIGRATE=1
-fi
-
 if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_MIGRATE -eq 1 || $DO_WEB -eq 1 ) ]]; then
   # A re-run keeps the name from the installed block, so it never resets to "the user".
   prev_name="$(awk '/claude-code-setup:begin/ {b=1; next} b && /^# Replies to / {sub(/^# Replies to /, ""); sub(/\r$/, ""); print; exit}' \
@@ -126,12 +81,11 @@ if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_MIGRATE -eq 1 || $DO_WEB -eq 1 ) ]
   NAME="$(ask_text "Name Claude should use for you in replies and rules?" "${prev_name:-the user}")"
 fi
 NAME="${NAME:-the user}"
-[[ "$NAME" != *$'\n'* ]] || die "--name must be one line"
+[[ "$NAME" != *$'\n'* ]] || die "the name must be one line"
 
 if [[ -n "$PROJECT" ]]; then
-  [[ -d "$PROJECT" ]] || die "--project: no such folder: $PROJECT"
+  [[ -d "$PROJECT" ]] || die "SETUP_PROJECT: no such folder: $PROJECT"
   PROJECT="$(cd "$PROJECT" && pwd)"
-  [[ $DO_MIGRATE -eq 1 ]] || warn "--project only matters with --migrate"
 fi
 
 [[ $DRY -eq 1 ]] && say "Dry run: nothing will be written."
@@ -156,7 +110,7 @@ if text.strip():
         if k in d and not isinstance(d[k], dict):
             sys.exit(f"settings.json key {k} must be an object")
 PY
-  [[ $DRY -eq 1 || -w "$SETTINGS" ]] || die "$SETTINGS is read-only. Make it writable (chmod u+w) or drop --format/--plugins."
+  [[ $DRY -eq 1 || -w "$SETTINGS" ]] || die "$SETTINGS is read-only. Make it writable (chmod u+w)."
 fi
 
 TMP="$(mktemp -d)"
@@ -290,7 +244,7 @@ if [[ $DO_MIGRATE -eq 1 ]]; then
   if [[ $NO_LLM -eq 1 ]]; then
     mode=no-llm
   elif ! command -v "$claude_bin" >/dev/null 2>&1; then
-    warn "claude not found, so migrating without a model (--no-llm): block added, conflicts listed"
+    warn "claude not found, so migrating without a model: block added, conflicts listed"
     mode=no-llm
   fi
   if [[ -z "$PROJECT" && "$PWD" != "$HOME" && "$PWD" != "$REPO_DIR" ]] &&
@@ -310,10 +264,6 @@ fi
 if [[ $DO_PLUGINS -eq 1 ]]; then
   add_setting "{\"path\": [\"extraKnownMarketplaces\", \"progress-bar\"], \"value\": {\"source\": {\"source\": \"github\", \"repo\": \"$PROGRESS_MARKETPLACE_REPO\"}}}"
   add_setting '{"path": ["enabledPlugins", "progress-bar@progress-bar"], "value": true}'
-  if [[ $DO_EXTRA -eq 1 ]]; then
-    add_setting '{"path": ["enabledPlugins", "frontend-design@claude-plugins-official"], "value": true}'
-    add_setting '{"path": ["enabledPlugins", "mattpocock-skills@claude-plugins-official"], "value": true}'
-  fi
 fi
 
 if [[ ${#PATCH_ITEMS[@]} -gt 0 ]]; then
@@ -337,40 +287,13 @@ if [[ ${#PATCH_ITEMS[@]} -gt 0 ]]; then
     done
 fi
 
-TOOLS_NOTE=""
 WEB_NOTE="${WEB_NOTE:-0}"
-if [[ $DO_TOOLS -eq 1 ]]; then
-  say ""; say "Tools"
-  if command -v brew >/dev/null 2>&1; then
-    if [[ "$OS" == Darwin ]]; then
-      if [[ $DRY -eq 1 ]]; then say "… would run: brew bundle --file $REPO_DIR/Brewfile"
-      else brew bundle --file "$REPO_DIR/Brewfile" && ok "Brewfile tools installed"; fi
-    else
-      if [[ $DRY -eq 1 ]]; then say "… would run: brew install gh jq ripgrep fd uv"
-      else brew install gh jq ripgrep fd uv && ok "CLI tools installed (ghostty is macOS-only here, see https://ghostty.org)"; fi
-    fi
-  else
-    warn "Homebrew not found. Install it from https://brew.sh then re-run ./setup.sh --tools"
-    [[ "$OS" == Linux ]] && warn "Or use your package manager, e.g. sudo apt install gh jq ripgrep fd-find, and uv from https://docs.astral.sh/uv/"
-    TOOLS_NOTE="Homebrew missing"
-  fi
-  if command -v claude >/dev/null 2>&1; then
-    skip "Claude Code already installed ($(claude --version 2>/dev/null | head -1))"
-  elif [[ $DRY -eq 1 ]]; then
-    say "… would offer the official installer: curl -fsSL https://claude.ai/install.sh | bash"
-  elif ask_strict "  Install Claude Code with the official installer (https://claude.ai/install.sh)?" y; then
-    curl -fsSL https://claude.ai/install.sh | bash && ok "Claude Code installed"
-  else
-    warn "Claude Code not installed (needs a yes or --yes). See https://code.claude.com/docs/en/setup"
-  fi
-fi
 
 # ---------- checklist ----------
 say ""
 say "Next steps (only you can do these)"
 command -v claude >/dev/null 2>&1 || say "! Install Claude Code: https://code.claude.com/docs/en/setup"
 say "! Sign in: run 'claude' and follow the login prompt (~1 min)"
-command -v gh >/dev/null 2>&1 && say "! GitHub CLI: run 'gh auth login' (~1 min)"
 say "! Claude in Chrome (optional): install the extension from https://claude.ai/chrome (~2 min)"
 [[ $DO_PLUGINS -eq 1 ]] && say "! Plugins: on first start, accept the progress-bar marketplace prompt, or run '/plugin install progress-bar@progress-bar'"
 if [[ "$WEB_NOTE" == 1 ]]; then
@@ -385,6 +308,5 @@ if [[ $DO_MIGRATE -eq 1 ]]; then
   say "! Migrate: fix any conflicting lines listed above by hand, or re-run './setup.sh' with claude installed so a model can rewrite them"
   [[ -f "$CLAUDE_DIR/output-styles/adhd-friendly.md" ]] || say "! Migrate: the rules point to the adhd-friendly output style. Install it with './setup.sh'"
 fi
-[[ -n "$TOOLS_NOTE" ]] && say "! Tools skipped: $TOOLS_NOTE"
 [[ $DRY -eq 1 ]] && say "(dry run: nothing was written)"
 say "Undo everything: ./uninstall.sh"

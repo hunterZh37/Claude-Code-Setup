@@ -30,7 +30,7 @@ Run the dry run and show its full output. It lists every file it would create or
 and update, with a diff for each changed file, and the settings keys it would set:
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/setup.sh" --format --plugins --web --migrate --dry-run --yes --name "<name>"
+SETUP_DRY_RUN=1 SETUP_YES=1 SETUP_NAME="<name>" bash "${CLAUDE_PLUGIN_ROOT}/setup.sh"
 ```
 
 If it reports an error (for example an invalid settings.json), show it verbatim and stop.
@@ -45,10 +45,10 @@ wording can differ a little from the preview, and that the same line checks appl
 ## Step 4. Apply
 
 ```
-bash "${CLAUDE_PLUGIN_ROOT}/setup.sh" --format --plugins --web --migrate --yes --name "<name>" [--force-style]
+SETUP_YES=1 SETUP_NAME="<name>" [SETUP_FORCE_STYLE=1] bash "${CLAUDE_PLUGIN_ROOT}/setup.sh"
 ```
 
-Add `--force-style` only if the user chose to switch the output style. Show the output.
+Add `SETUP_FORCE_STYLE=1` only if the user chose to switch the output style. Show the output.
 Then print `~/.claude/.claude-code-setup/web/preferences.md` in a code block and say to
 paste it into claude.ai under Settings, Your Claude, Instructions (it is also on the
 clipboard if the run said so). Tell the user to restart Claude Code and run `/output-style`

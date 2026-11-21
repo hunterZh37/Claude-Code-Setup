@@ -2,7 +2,7 @@
 
 echo "1. Dry run writes nothing"
 H1="$WORK/home-dry"; mkdir -p "$H1"
-out="$(HOME="$H1" "$REPO/setup.sh" --yes --dry-run --format --plugins </dev/null)"
+out="$(HOME="$H1" "$REPO/tests/setup-flags.sh" --yes --dry-run --format --plugins </dev/null)"
 check "dry run creates no files" test -z "$(find "$H1" -mindepth 1 -print -quit)"
 check "dry run says what it would do" grep -q "would create" <<<"$out"
 
@@ -13,7 +13,7 @@ printf '%s\n' "$ORIG_SETTINGS" >"$C/settings.json"
 printf '# My rules\nkeep me\n' >"$C/CLAUDE.md"
 printf 'old style\n' >"$C/output-styles/adhd-friendly.md"
 cp "$C/CLAUDE.md" "$WORK/orig-CLAUDE.md"
-run() { HOME="$H2" PATH="$WORK/bin:$PATH" "$REPO/setup.sh" --yes --name Alex --format --plugins --extra-plugins "$@" </dev/null; }
+run() { HOME="$H2" PATH="$WORK/bin:$PATH" "$REPO/tests/setup-flags.sh" --yes --name Alex --format --plugins "$@" </dev/null; }
 run >"$WORK/run1.log"
 check "output style installed" has "$C/output-styles/adhd-friendly.md" "name: adhd-friendly"
 check "output style uses the name" has "$C/output-styles/adhd-friendly.md" "Alex reads these replies"
@@ -25,7 +25,6 @@ check "settings keep env" test "$(json_get "$C/settings.json" env KEEP)" = '"1"'
 check "settings keep user plugin" test "$(json_get "$C/settings.json" enabledPlugins foo@bar)" = true
 check "settings keep chosen outputStyle" test "$(json_get "$C/settings.json" outputStyle)" = '"Explanatory"'
 check "progress-bar enabled" test "$(json_get "$C/settings.json" enabledPlugins progress-bar@progress-bar)" = true
-check "extra plugin enabled" test "$(json_get "$C/settings.json" enabledPlugins frontend-design@claude-plugins-official)" = true
 check "marketplace added" has "$C/settings.json" "hunterZh37/progress-bar-plugin"
 check "settings backed up" test "$(find "$C" -name 'settings.json.bak-*' | wc -l | tr -d ' ')" = 1
 check "CLAUDE.md backed up" test "$(find "$C" -name 'CLAUDE.md.bak-*' | wc -l | tr -d ' ')" = 1
@@ -54,7 +53,7 @@ check "uninstall again is a no-op" bash -c "HOME='$H2' '$REPO/uninstall.sh' | gr
 
 echo "6. Fresh HOME install then uninstall leaves no files"
 H3="$WORK/home-fresh"; mkdir -p "$H3"
-HOME="$H3" "$REPO/setup.sh" --yes --format --plugins </dev/null >"$WORK/run4.log"
+HOME="$H3" "$REPO/tests/setup-flags.sh" --yes --format --plugins </dev/null >"$WORK/run4.log"
 check "default name used" has "$H3/.claude/CLAUDE.md" "# Replies to the user"
 check "default name capitalized" has "$H3/.claude/output-styles/adhd-friendly.md" "The user reads these replies"
 check "no RTK import" lacks "$H3/.claude/CLAUDE.md" "@RTK.md"
@@ -72,15 +71,21 @@ check "plain ./setup.sh sets the progress-bar plugin" test "$(json_get "$HD/.cla
 check "plain ./setup.sh runs migrate" grep -q "Migrate existing agent instructions" "$WORK/default.log"
 check "plain ./setup.sh keeps user text" has "$HD/.claude/CLAUDE.md" "Use emoji everywhere"
 check "plain ./setup.sh skips Homebrew tools" lacks "$WORK/default.log" "brew bundle"
-check "unknown flag fails" bash -c "! HOME='$WORK/x' '$REPO/setup.sh' --nope >/dev/null 2>&1"
+for f in --nope --format --yes -h --help; do
+  check "setup.sh rejects $f" bash -c "! HOME='$WORK/x' '$REPO/setup.sh' $f >/dev/null 2>&1"
+done
+check "uninstall.sh rejects --dry-run" bash -c "! HOME='$WORK/x' '$REPO/uninstall.sh' --dry-run >/dev/null 2>&1"
+check "SETUP_DRY_RUN=false is not a dry run" bash -c "HOME='$WORK/x-false' SETUP_DRY_RUN=false SETUP_YES=1 SETUP_ONLY=format '$REPO/setup.sh' </dev/null | grep -q 'Dry run'; test \${PIPESTATUS[1]} = 1"
+check "SETUP_ONLY with only spaces fails" bash -c "! HOME='$WORK/x' SETUP_ONLY=' ' '$REPO/setup.sh' </dev/null >/dev/null 2>&1"
+check "SETUP_ONLY='*' is not glob-expanded" bash -c "cd '$REPO' && HOME='$WORK/x' SETUP_ONLY='*' '$REPO/setup.sh' </dev/null 2>&1 | grep -q 'unknown part: \*'"
 mkdir -p "$WORK/bad/.claude"; echo '{not json' >"$WORK/bad/.claude/settings.json"
-check "invalid settings.json fails without changes" bash -c "! HOME='$WORK/bad' '$REPO/setup.sh' --yes --plugins </dev/null >/dev/null 2>&1 && grep -q 'not json' '$WORK/bad/.claude/settings.json'"
+check "invalid settings.json fails without changes" bash -c "! HOME='$WORK/bad' '$REPO/tests/setup-flags.sh' --yes --plugins </dev/null >/dev/null 2>&1 && grep -q 'not json' '$WORK/bad/.claude/settings.json'"
 
 
 
 echo "8. Re-run keeps the name"
 HN="$WORK/home-name"; mkdir -p "$HN"
-HOME="$HN" SETUP_NO_TTY=1 "$REPO/setup.sh" --name "Sam O'Neil" --format </dev/null >/dev/null
-HOME="$HN" SETUP_NO_TTY=1 "$REPO/setup.sh" --format </dev/null >"$WORK/rename.log"
+HOME="$HN" SETUP_NO_TTY=1 "$REPO/tests/setup-flags.sh" --name "Sam O'Neil" --format </dev/null >/dev/null
+HOME="$HN" SETUP_NO_TTY=1 "$REPO/tests/setup-flags.sh" --format </dev/null >"$WORK/rename.log"
 check "re-run without --name keeps the name" has "$HN/.claude/CLAUDE.md" "# Replies to Sam O'Neil"
 check "re-run without --name changes nothing" lacks "$WORK/rename.log" "updated"
