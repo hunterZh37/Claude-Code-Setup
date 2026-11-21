@@ -1,0 +1,120 @@
+# Migrate tests: no-LLM path in full, LLM path with a fake `claude`. Sourced by run-tests.sh.
+FIX="$REPO/tests/fixtures"
+FAKE="$REPO/tests/fakes/claude"
+
+new_migrate_home() { # new_migrate_home dir: user CLAUDE.md with conflicts + a project
+  rm -rf "$1"; mkdir -p "$1/home/.claude"
+  cp "$FIX/user/CLAUDE.md" "$1/home/.claude/CLAUDE.md"
+  cp -R "$FIX/project" "$1/proj"
+}
+mig() { # mig dir [flags...]
+  local d="$1"; shift
+  (cd "$d" && HOME="$d/home" "$REPO/setup.sh" --migrate --name Sam "$@" </dev/null)
+}
+non_format_same() { # the original's non-format lines all appear, byte for byte, in order
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+sys.path.insert(0, sys.argv[0] and __import__("os").environ["REPO"] + "/lib")
+from migrate import analyze
+orig, new = open(sys.argv[1]).read(), open(sys.argv[2]).read()
+fmt = {n for n, _ in analyze(orig)[0]}
+want = [l for i, l in enumerate(orig.splitlines(), 1) if i not in fmt]
+it = iter(new.splitlines())
+sys.exit(0 if all(any(l == x for x in it) for l in want) else 1)
+PY
+}
+export REPO
+
+echo "M1. No-LLM migrate"
+M="$WORK/mig1"; new_migrate_home "$M"
+mig "$M" --no-llm --yes --dry-run >"$WORK/m-dry.log"
+check "dry run shows a diff" grep -q '^+++ ~/.claude/CLAUDE.md (migrated)' "$WORK/m-dry.log"
+check "dry run writes nothing" cmp -s "$M/home/.claude/CLAUDE.md" "$FIX/user/CLAUDE.md"
+check "no project files without --project" bash -c "! grep -q 'AGENTS.md' '$WORK/m-dry.log'"
+mig "$M" --no-llm --yes --project "$M/proj" >"$WORK/m1.log"
+C="$M/home/.claude/CLAUDE.md"
+check "block added to CLAUDE.md" has "$C" "claude-code-setup:begin"
+check "block uses the name" has "$C" "# Replies to Sam"
+check "CLAUDE.md text before the block is byte-identical" bash -c "head -c \$(wc -c <'$FIX/user/CLAUDE.md') '$C' | cmp -s - '$FIX/user/CLAUDE.md'"
+check "AGENTS.md text kept, portable block added" bash -c "head -c \$(wc -c <'$FIX/project/AGENTS.md') '$M/proj/AGENTS.md' | cmp -s - '$FIX/project/AGENTS.md' && grep -q '# Reply format' '$M/proj/AGENTS.md'"
+check ".cursorrules gets the portable block" has "$M/proj/.cursorrules" "Priority when rules collide"
+check "new Cursor rule created with alwaysApply" has "$M/proj/.cursor/rules/claude-code-setup-format.mdc" "alwaysApply: true"
+check "existing Cursor rule untouched" cmp -s "$M/proj/.cursor/rules/style.mdc" "$FIX/project/.cursor/rules/style.mdc"
+check "conflict: summary listed" grep -q 'CLAUDE.md:6: - Always end with a summary' "$WORK/m1.log"
+check "conflict: tables listed" grep -q 'CLAUDE.md:5: - Never use tables' "$WORK/m1.log"
+check "conflict: emoji listed" grep -q 'CLAUDE.md:4: - Be friendly and use emoji' "$WORK/m1.log"
+check "conflict: AGENTS.md verbosity listed" grep -q 'AGENTS.md:4: Responses should be detailed' "$WORK/m1.log"
+check "conflict: cursorrules bullets listed" grep -q 'cursorrules:2: Do not use bullet points' "$WORK/m1.log"
+check "code-block text is not a conflict" bash -c "! grep -qE 'CLAUDE.md:[0-9]+: # end with a summary' '$WORK/m1.log'"
+check "backups made" test "$(find "$M" -name '*.bak-*' | wc -l | tr -d ' ')" = 3
+before="$(snapshot "$M")"; sleep 1
+mig "$M" --no-llm --yes --project "$M/proj" >"$WORK/m2.log"
+check "re-run is idempotent" test "$before" = "$(snapshot "$M")"
+HOME="$M/home" "$REPO/uninstall.sh" >/dev/null
+check "uninstall restores CLAUDE.md" cmp -s "$C" "$FIX/user/CLAUDE.md"
+check "uninstall restores AGENTS.md" cmp -s "$M/proj/AGENTS.md" "$FIX/project/AGENTS.md"
+check "uninstall restores .cursorrules" cmp -s "$M/proj/.cursorrules" "$FIX/project/.cursorrules"
+check "uninstall deletes the new Cursor rule" test ! -e "$M/proj/.cursor/rules/claude-code-setup-format.mdc"
+
+echo "M2. No terminal and no --yes never writes"
+M="$WORK/mig2"; new_migrate_home "$M"
+mig "$M" --no-llm >"$WORK/m-notty.log"
+check "nothing written without a yes" cmp -s "$M/home/.claude/CLAUDE.md" "$FIX/user/CLAUDE.md"
+check "says how to write" grep -q 're-run with --yes' "$WORK/m-notty.log"
+
+echo "M3. LLM migrate with a fake claude"
+M="$WORK/mig3"; new_migrate_home "$M"; LOG="$WORK/fake.log"; : >"$LOG"
+llm() { SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_LOG="$LOG" FAKE_CLAUDE_MODE="${MODE:-ok}" mig "$@"; }
+MODE=ok llm "$M" --yes --project "$M/proj" >"$WORK/m3.log"
+check "model called with no tools" grep -q -- '--tools' "$LOG"
+C="$M/home/.claude/CLAUDE.md"
+check "conflicting rules removed from CLAUDE.md" bash -c "! grep -qE 'use emoji|Never use tables|Always end with a summary' '$C'"
+check "migrated note added" has "$C" "Migrated by Claude-Code-Setup"
+check "block added after the model step" has "$C" "claude-code-setup:begin"
+check "non-format lines survive verbatim" non_format_same "$FIX/user/CLAUDE.md" "$C"
+check "model output pinned" bash -c "ls '$M/home/.claude/.claude-code-setup'/migrate-*/*.migrated >/dev/null"
+calls="$(wc -l <"$LOG")"
+MODE=ok llm "$M" --yes --project "$M/proj" >"$WORK/m3b.log"
+check "re-run does not call the model again" test "$calls" = "$(wc -l <"$LOG")"
+HOME="$M/home" "$REPO/uninstall.sh" >/dev/null
+check "uninstall after LLM migrate restores CLAUDE.md" cmp -s "$C" "$FIX/user/CLAUDE.md"
+check "uninstall after LLM migrate restores AGENTS.md" cmp -s "$M/proj/AGENTS.md" "$FIX/project/AGENTS.md"
+
+for MODE in fail garbage empty drops; do
+  M="$WORK/mig-$MODE"; new_migrate_home "$M"
+  MODE=$MODE llm "$M" --yes >"$WORK/m-$MODE.log" 2>&1
+  C="$M/home/.claude/CLAUDE.md"
+  check "model '$MODE': model text not written" bash -c "! grep -q 'Migrated by' '$C'"
+  check "model '$MODE': original text intact before the block" bash -c "head -c \$(wc -c <'$FIX/user/CLAUDE.md') '$C' | cmp -s - '$FIX/user/CLAUDE.md'"
+done
+check "dropped content is reported" grep -q 'dropped 1 non-format line' "$WORK/m-drops.log"
+check "failure is reported" grep -q 'model step failed' "$WORK/m-fail.log"
+
+echo "M4. Secrets are never sent"
+M="$WORK/mig4"; new_migrate_home "$M"; : >"$LOG"
+printf 'Deploy key: ANTHROPIC_API_KEY=sk-ant-api03-%s\n' "abcdefghijklmnopqrstuvwxyz0123" >>"$M/home/.claude/CLAUDE.md"
+MODE=ok llm "$M" --yes >"$WORK/m4.log"
+check "file with a key not sent to the model" test ! -s "$LOG"
+check "reason given" grep -q 'looks like a' "$WORK/m4.log"
+check "key not echoed in the output" bash -c "! grep -q 'abcdefghijklmnop' '$WORK/m4.log'"
+
+echo "M5. Odd files"
+M="$WORK/mig5"; rm -rf "$M"; mkdir -p "$M/home/.claude"
+printf 'bin\0ary' >"$M/home/.claude/CLAUDE.md"
+mig "$M" --no-llm --yes >"$WORK/m5.log" 2>&1
+check "binary CLAUDE.md skipped" grep -q 'skipped ~/.claude/CLAUDE.md: binary' "$WORK/m5.log"
+check "binary CLAUDE.md untouched" bash -c "printf 'bin\0ary' | cmp -s - '$M/home/.claude/CLAUDE.md'"
+M="$WORK/mig6"; rm -rf "$M"; mkdir -p "$M/home/.claude"
+python3 -c "import sys; open(sys.argv[1],'w').write('- Always end with a summary.\n' + 'Fact line.\n' * 30000)" "$M/home/.claude/CLAUDE.md"
+: >"$LOG"; MODE=ok llm "$M" --yes >"$WORK/m6.log" 2>&1
+check "large file not sent to the model" test ! -s "$LOG"
+check "large file still gets the block" has "$M/home/.claude/CLAUDE.md" "claude-code-setup:begin"
+M="$WORK/mig7"; new_migrate_home "$M"; printf '\n@rules/style.md\n' >>"$M/home/.claude/CLAUDE.md"
+mkdir -p "$M/home/.claude/rules"; printf 'Never use tables.\n' >"$M/home/.claude/rules/style.md"
+mig "$M" --no-llm --yes --dry-run >"$WORK/m7.log"
+check "@import detected" grep -q 'imported by CLAUDE.md' "$WORK/m7.log"
+check "@import conflict listed" grep -q 'style.md:1: Never use tables' "$WORK/m7.log"
+M="$WORK/mig8"; new_migrate_home "$M"; chmod 444 "$M/proj/AGENTS.md"
+mig "$M" --no-llm --yes --project "$M/proj" >"$WORK/m8.log"
+check "read-only AGENTS.md skipped" grep -q 'skipped .*AGENTS.md: it is read-only' "$WORK/m8.log"
+chmod 644 "$M/proj/AGENTS.md"

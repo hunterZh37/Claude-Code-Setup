@@ -26,7 +26,7 @@ MISSING = object()
 def load(path, default):
     if not os.path.exists(path):
         return default
-    with open(path) as fh:
+    with open(path, encoding="utf-8") as fh:
         text = fh.read()
     if not text.strip():
         return default
@@ -37,13 +37,20 @@ def load(path, default):
 
 
 def write_atomic(path, data):
-    d = os.path.dirname(os.path.abspath(path))
+    path = os.path.realpath(path)  # follow a symlinked settings.json instead of replacing the link
+    d = os.path.dirname(path)
     os.makedirs(d, exist_ok=True)
     fd, tmp = tempfile.mkstemp(dir=d, prefix=".tmp-settings-")
-    with os.fdopen(fd, "w") as fh:
-        json.dump(data, fh, indent=2, ensure_ascii=False)
-        fh.write("\n")
-    os.replace(tmp, path)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            json.dump(data, fh, indent=2, ensure_ascii=False)
+            fh.write("\n")
+        if os.path.exists(path):
+            shutil.copymode(path, tmp)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
 
 
 def get(obj, path):

@@ -82,7 +82,10 @@ Needs `bash` and `python3` 3.8 or newer (macOS: `xcode-select --install`). `--to
 | `--extra-plugins` | Also enables official `frontend-design` and `mattpocock-skills` |
 | `--rtk` | Token-saving note for Claude. Needs `rtk`, which you install |
 | `--tools` | Brewfile tools and Claude Code |
-| `--all` | format, commands, plugins, rtk and tools |
+| `--migrate` | Reformat your existing CLAUDE.md, AGENTS.md and Cursor, Copilot, Gemini or Windsurf rules. See [Migrate](#migrate-an-existing-setup) |
+| `--no-llm` | Migrate without a model: add the block, list conflicts |
+| `--project PATH` | Also migrate that project's agent files |
+| `--all` | format, commands, plugins, rtk and tools (not migrate) |
 | `--name NAME` | Who reads the replies. Default "the user" |
 | `--yes` | Accept defaults, never prompt |
 | `--force-style` | Set `outputStyle` even if you picked another one |
@@ -97,6 +100,7 @@ Needs `bash` and `python3` 3.8 or newer (macOS: `xcode-select --install`). `--to
 | **Commands** | `~/.claude/commands/worked-hours.md`, `~/.claude/scripts/workday-hours.py` | `/worked-hours` reads every Claude Code transcript for a day, merges them into activity blocks and asks you to confirm the hours. `--prefix ~/work` counts only work projects |
 | **Plugins** | `enabledPlugins` and `extraKnownMarketplaces` in settings | [progress-bar](https://github.com/hunterZh37/progress-bar-plugin) shows live bars for subagents and long jobs in the status line and a side panel. It sets up its own status line |
 | **rtk** | `~/.claude/RTK.md`, imported from CLAUDE.md | Tells Claude that [rtk](https://github.com/rtk-ai/rtk) condenses command output, so it trusts the short form and batches commands |
+| **Migrate** | edits your existing agent files, after a diff and a yes | Removes or rewords reply-format rules that fight this format and adds the format block. See below |
 | **Tools** | `Brewfile` | `gh`, `jq`, `ripgrep`, `fd`, `uv` and the Ghostty terminal, plus Claude Code from the [official installer](https://code.claude.com/docs/en/setup) |
 
 ### How the script stays safe
@@ -121,6 +125,69 @@ Steps only you can do. The script prints them too.
 | **Restart** | Quit and reopen Claude Code so the output style loads |
 | **Verify** | Run `/output-style` and check `adhd-friendly` is selected |
 
+## Migrate an existing setup
+
+Already have rules for Claude Code or another agent? `--migrate` brings them in line with this format. Only reply-format rules change (length, headings, bullets, tables, emoji, tone, openings, endings, summaries). Project facts, commands, workflows, coding conventions and safety rules stay byte for byte.
+
+```bash
+./setup.sh --migrate --dry-run --project ~/code/my-app   # see every diff first
+./setup.sh --migrate --project ~/code/my-app
+./setup.sh --migrate --no-llm                            # no model, block + conflict list
+```
+
+**What it looks at**
+
+| Scope | Files |
+|---|---|
+| **You** | `~/.claude/CLAUDE.md` and its `@imports`, `output-styles/`, `agents/`, `commands/` |
+| **Project** | `CLAUDE.md`, `CLAUDE.local.md`, `AGENTS.md`, `GEMINI.md`, `.cursorrules`, `.cursor/rules/`, `.github/copilot-instructions.md`, `.windsurfrules` |
+
+Project files are touched only with `--project` or when you say yes to the prompt.
+
+**How it works**
+
+1. **Detect** the files above and list them.
+2. **Analyze** each one and list the format rules that clash with this format.
+3. **Rewrite.** Your own `claude -p` (no tools, nothing saved) gets the file and the format spec. It deletes or rewords only the clashing format rules and adds a one-line "Migrated by Claude-Code-Setup" note. Its output is pinned in `~/.claude/.claude-code-setup/migrate-<time>/` so you can diff it.
+4. **Check.** Every non-format line must survive word for word. If the model dropped one, its version is rejected.
+5. **Add the block.** Claude Code files get the 4 core rules. Files for other agents get the full format as a portable markdown block, because output styles only work in Claude Code. Cursor gets a new `.cursor/rules/claude-code-setup-format.mdc`.
+6. **Confirm.** You see a unified diff per file and answer y or N (or pass `--yes`). Each changed file is backed up and `./uninstall.sh` restores it.
+
+**Never sent to a model:** files that look like they hold a key, token or password, files over 200 KB and binary files. They get the block only, and the reason is printed.
+
+**Example**
+
+Before, `CLAUDE.md`:
+
+```
+- Be friendly and use emoji to keep things fun.
+- Never use tables, write prose instead.
+- Always end with a summary of what you did.
+- Run `npm test` before every commit.
+- Never push to main without asking.
+```
+
+After:
+
+```
+- Run `npm test` before every commit.
+- Never push to main without asking.
+<!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->
+
+<!-- claude-code-setup:begin ... -->
+# Replies to Sam
+...the 4 core rules...
+<!-- claude-code-setup:end -->
+```
+
+With `--no-llm` the file keeps all five lines, gets the block, and the run prints the three clashing lines for you to fix:
+
+```
+! 3 format rule(s) conflict with the new format. Resolve them by hand:
+  ~/.claude/CLAUDE.md:1: - Be friendly and use emoji to keep things fun.
+      (the target uses plain glyphs (✓ ✗ ! … ○), never emoji)
+```
+
 ## Customize
 
 * **Your name:** re-run with `--name Sam`. The block and style are re-rendered.
@@ -143,7 +210,7 @@ It restores every file setup replaced from its backup, deletes files setup creat
 tests/run-tests.sh
 ```
 
-Runs setup and uninstall against a throwaway `HOME`. It checks the dry run writes nothing, files land, your settings and CLAUDE.md text survive, a re-run changes nothing, uninstall restores the original state and the hours script counts correctly. It runs `shellcheck` when installed.
+Runs setup, migrate and uninstall against throwaway `HOME` folders, with a fake `claude` for the model step. It checks the dry run writes nothing, files land, your settings and CLAUDE.md text survive, a re-run changes nothing, uninstall restores the original state, secrets never reach the model and the hours script counts correctly. `tests/run-tests.sh migrate` runs one part. It runs `shellcheck` when installed.
 
 ## Why the format looks like this
 

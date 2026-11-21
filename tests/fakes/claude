@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Stand-in for `claude -p` in tests. FAKE_CLAUDE_MODE picks the behavior:
+ok (drop conflicting lines, add the note), drops (also drop a non-format line),
+garbage, empty, fail, noop (return the file unchanged). Each call is logged to
+FAKE_CLAUDE_LOG."""
+import os
+import re
+import sys
+
+mode = os.environ.get("FAKE_CLAUDE_MODE", "ok")
+prompt = sys.stdin.read()
+log = os.environ.get("FAKE_CLAUDE_LOG")
+if log:
+    with open(log, "a") as fh:
+        fh.write(" ".join(sys.argv[1:]) + "\n")
+if mode == "fail":
+    print("API error: overloaded", file=sys.stderr)
+    sys.exit(1)
+if mode == "empty":
+    sys.exit(0)
+if mode == "garbage":
+    print("Sure! Here is a poem about markdown instead.")
+    sys.exit(0)
+body = re.search(r"<file>\n(.*)\n</file>", prompt, re.S).group(1)
+if mode == "noop":
+    print(f"<migrated_file>\n{body}\n</migrated_file>\n<changes>\n</changes>")
+    sys.exit(0)
+bad = re.compile(r"summary|never use tables|emoji", re.I)
+kept, changes = [], []
+for line in body.split("\n"):
+    if line.startswith("- ") and bad.search(line):
+        changes.append("deleted: " + line.strip())
+    else:
+        kept.append(line)
+if mode == "drops":
+    kept = [ln for ln in kept if "npm test" not in ln]
+out = "\n".join(kept).rstrip("\n") + "\n<!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->"
+print(f"<migrated_file>\n{out}\n</migrated_file>\n<changes>\n" + "\n".join(changes) + "\n</changes>")

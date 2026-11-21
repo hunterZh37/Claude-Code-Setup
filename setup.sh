@@ -21,13 +21,17 @@ Components (pick any, or none to be asked one by one):
   --extra-plugins  also enable official frontend-design and mattpocock-skills
   --rtk            token-saving command output (needs rtk, installed by you)
   --tools          Brewfile tools (gh, jq, ripgrep, fd, uv, ghostty) + Claude Code
-  --all            format, commands, plugins, rtk and tools
+  --migrate        reformat existing CLAUDE.md, AGENTS.md, Cursor/Copilot/Gemini rules
+                   to this format (shows a diff and asks before each write)
+  --all            format, commands, plugins, rtk and tools (not migrate)
 
 Options:
   --name NAME      who reads the replies (default: "the user")
   --yes            accept defaults, never prompt
   --force-style    set outputStyle even if you already chose another one
   --dry-run        show what would change, change nothing
+  --no-llm         migrate without a model: add the format block, list conflicts
+  --project PATH   also migrate the agent files of this project
   -h, --help       show this help
 EOF
 }
@@ -40,8 +44,8 @@ warn() { printf '! %s\n' "$*"; }
 die()  { printf '✗ %s\n' "$*" >&2; exit 1; }
 
 # ---------- args ----------
-DO_FORMAT=0 DO_COMMANDS=0 DO_PLUGINS=0 DO_EXTRA=0 DO_RTK=0 DO_TOOLS=0
-NAME="" YES=0 DRY=0 FORCE_STYLE=0 CHOSE=0
+DO_FORMAT=0 DO_COMMANDS=0 DO_PLUGINS=0 DO_EXTRA=0 DO_RTK=0 DO_TOOLS=0 DO_MIGRATE=0
+NAME="" YES=0 DRY=0 FORCE_STYLE=0 CHOSE=0 NO_LLM=0 PROJECT=""
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --format) DO_FORMAT=1; CHOSE=1 ;;
@@ -50,6 +54,10 @@ while [[ $# -gt 0 ]]; do
     --extra-plugins) DO_PLUGINS=1; DO_EXTRA=1; CHOSE=1 ;;
     --rtk) DO_RTK=1; CHOSE=1 ;;
     --tools) DO_TOOLS=1; CHOSE=1 ;;
+    --migrate) DO_MIGRATE=1; CHOSE=1 ;;
+    --no-llm) NO_LLM=1 ;;
+    --project) [[ $# -ge 2 ]] || die "--project needs a path"; PROJECT="$2"; shift ;;
+    --project=*) PROJECT="${1#--project=}" ;;
     --all) DO_FORMAT=1; DO_COMMANDS=1; DO_PLUGINS=1; DO_RTK=1; DO_TOOLS=1; CHOSE=1 ;;
     --name) [[ $# -ge 2 ]] || die "--name needs a value"; NAME="$2"; shift ;;
     --name=*) NAME="${1#--name=}" ;;
@@ -73,6 +81,12 @@ ask_yn() { # ask_yn "question" default(y|n)
   read -r -p "$q $hint " ans </dev/tty || ans=""
   ans="${ans:-$def}"
   [[ "$ans" =~ ^[Yy] ]]
+}
+
+ask_strict() { # like ask_yn but a run with no terminal and no --yes always says no
+  if [[ $YES -eq 1 ]]; then return 0; fi
+  if [[ $HAVE_TTY -eq 0 ]]; then return 1; fi
+  ask_yn "$1" "$2"
 }
 
 ask_text() { # ask_text "question" default
@@ -99,37 +113,69 @@ if [[ $CHOSE -eq 0 ]]; then
   ask_yn "  progress-bar plugin (status line + panel)?" y && DO_PLUGINS=1
   ask_yn "  rtk token saving (you install rtk yourself)?" n && DO_RTK=1
   ask_yn "  CLI tools via Homebrew + Claude Code?" n && DO_TOOLS=1
+  ask_yn "  Migrate your existing CLAUDE.md / AGENTS.md / Cursor rules to this format?" n && DO_MIGRATE=1
 fi
 if [[ $DO_PLUGINS -eq 1 && $DO_EXTRA -eq 0 ]]; then
   ask_yn "  Also enable official frontend-design and mattpocock-skills plugins?" n && DO_EXTRA=1
 fi
 
-if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_COMMANDS -eq 1 ) ]]; then
+if [[ -z "$NAME" && ( $DO_FORMAT -eq 1 || $DO_COMMANDS -eq 1 || $DO_MIGRATE -eq 1 ) ]]; then
   NAME="$(ask_text "Name Claude should use for you in replies and rules?" "the user")"
 fi
 NAME="${NAME:-the user}"
 [[ "$NAME" != *$'\n'* ]] || die "--name must be one line"
 
+if [[ -n "$PROJECT" ]]; then
+  [[ -d "$PROJECT" ]] || die "--project: no such folder: $PROJECT"
+  PROJECT="$(cd "$PROJECT" && pwd)"
+  [[ $DO_MIGRATE -eq 1 ]] || warn "--project only matters with --migrate"
+fi
+
 [[ $DRY -eq 1 ]] && say "Dry run: nothing will be written."
 say "Claude config folder: $CLAUDE_DIR"
 
+# Check settings.json before writing anything, so a bad file stops the run cleanly.
+SETTINGS="$CLAUDE_DIR/settings.json"
+if [[ $DO_FORMAT -eq 1 || $DO_PLUGINS -eq 1 ]] && [[ -e "$SETTINGS" ]]; then
+  python3 - "$SETTINGS" <<'PY' || die "$SETTINGS is not valid JSON (comments and trailing commas are not allowed). Fix it or move it aside, then re-run."
+import json, sys
+with open(sys.argv[1]) as fh:
+    text = fh.read()
+if text.strip():
+    d = json.loads(text)
+    if not isinstance(d, dict):
+        sys.exit(1)
+PY
+  [[ $DRY -eq 1 || -w "$SETTINGS" ]] || die "$SETTINGS is read-only. Make it writable (chmod u+w) or drop --format/--plugins."
+fi
+
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+trap 'echo; die "interrupted. Files are written atomically, so none is half-written. Re-run to finish."' INT TERM
 
 # ---------- file install with backup + manifest ----------
-record() { # record kind path backup  (first record per path wins, used by uninstall)
+helper() { python3 "$REPO_DIR/lib/helpers.py" "$@"; }
+
+record() { # record kind path backup hash  (first record per kind+path wins, used by uninstall)
   [[ $DRY -eq 1 ]] && return 0
   mkdir -p "$STATE_DIR"
   touch "$MANIFEST"
-  if ! manifest_has "$2"; then
-    printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$MANIFEST"
+  if ! manifest_has "$2" "$1"; then
+    printf '%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "${4:--}" >>"$MANIFEST"
   fi
 }
 
-manifest_has() { [[ -f "$MANIFEST" ]] && awk -F'\t' -v p="$1" '$2 == p { found = 1 } END { exit !found }' "$MANIFEST"; }
+manifest_has() { # manifest_has path [kind]
+  [[ -f "$MANIFEST" ]] && awk -F'\t' -v p="$1" -v k="${2:-}" \
+    '$2 == p && (k == "" || $1 == k) { found = 1 } END { exit !found }' "$MANIFEST"
+}
 
 place() { # place kind rendered_file dest
   local kind="$1" src="$2" dest="$3" bak="NONE" label="${3/#$HOME/~}"
+  if [[ -e "$dest" && ! -f "$dest" ]]; then
+    warn "skipped $label: it is not a regular file"
+    return 0
+  fi
   if [[ -f "$dest" ]] && cmp -s "$src" "$dest"; then
     skip "$label unchanged"
     record "$kind" "$dest" "NONE-UNCHANGED"
@@ -139,19 +185,24 @@ place() { # place kind rendered_file dest
     if [[ -e "$dest" ]]; then say "… would back up and update $label"; else say "… would create $label"; fi
     return 0
   fi
-  mkdir -p "$(dirname "$dest")"
+  if [[ -e "$dest" && ! -w "$dest" ]]; then
+    warn "skipped $label: it is read-only (chmod u+w to let setup change it)"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dest")" || die "cannot create $(dirname "$dest")"
   if [[ -e "$dest" ]]; then
     bak="$dest.bak-$STAMP"
-    cp -p "$dest" "$bak"
+    cp -p "$dest" "$bak" || die "cannot back up $label"
   fi
-  record "$kind" "$dest" "$bak"
-  cp "$src" "$dest"
+  record "$kind" "$dest" "$bak" "$(helper hash "$src")"
+  helper write "$src" "$dest" || die "cannot write $label"
   if [[ "$bak" == NONE ]]; then ok "created $label"; else ok "updated $label (backup: ${bak/#$HOME/~})"; fi
 }
 
 install_template() { # install_template template dest
-  local out="$TMP/$(basename "$2")"
-  python3 "$REPO_DIR/lib/helpers.py" render "$1" "$out" "$NAME"
+  local out
+  out="$TMP/$(basename "$2")"
+  helper render "$1" "$out" "$NAME"
   place file "$out" "$2"
 }
 
@@ -176,15 +227,19 @@ if [[ $DO_FORMAT -eq 1 ]]; then
   install_template "$REPO_DIR/templates/output-styles/adhd-friendly.md.tmpl" "$CLAUDE_DIR/output-styles/adhd-friendly.md"
 
   block="$TMP/block.md"
-  python3 "$REPO_DIR/lib/helpers.py" render "$REPO_DIR/templates/CLAUDE.md.tmpl" "$block" "$NAME"
+  helper render "$REPO_DIR/templates/CLAUDE.md.tmpl" "$block" "$NAME"
   # Import RTK.md only when this setup installed it (now or on an earlier run).
   if [[ $RTK_READY -eq 1 ]] || { [[ -f "$CLAUDE_DIR/RTK.md" ]] && manifest_has "$CLAUDE_DIR/RTK.md"; }; then
-    if ! python3 "$REPO_DIR/lib/helpers.py" has-outside "$CLAUDE_DIR/CLAUDE.md" "@RTK.md"; then
+    if ! helper has-outside "$CLAUDE_DIR/CLAUDE.md" "@RTK.md"; then
       printf '\n@RTK.md\n' >>"$block"
     fi
   fi
-  python3 "$REPO_DIR/lib/helpers.py" block-apply "$CLAUDE_DIR/CLAUDE.md" "$block" "$TMP/CLAUDE.md"
-  place block "$TMP/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+  if helper is-text "$CLAUDE_DIR/CLAUDE.md"; then
+    helper block-apply "$CLAUDE_DIR/CLAUDE.md" "$block" "$TMP/CLAUDE.md"
+    place block "$TMP/CLAUDE.md" "$CLAUDE_DIR/CLAUDE.md"
+  else
+    warn "skipped ${CLAUDE_DIR/#$HOME/~}/CLAUDE.md: it is not UTF-8 text"
+  fi
 
   style_force=false
   current_style="$(python3 - "$CLAUDE_DIR/settings.json" <<'PY'
@@ -210,7 +265,31 @@ if [[ $DO_COMMANDS -eq 1 ]]; then
   say ""; say "Commands"
   install_template "$REPO_DIR/templates/commands/worked-hours.md" "$CLAUDE_DIR/commands/worked-hours.md"
   install_template "$REPO_DIR/templates/scripts/workday-hours.py" "$CLAUDE_DIR/scripts/workday-hours.py"
-  [[ $DRY -eq 1 ]] || chmod +x "$CLAUDE_DIR/scripts/workday-hours.py"
+  if [[ $DRY -eq 0 && -w "$CLAUDE_DIR/scripts/workday-hours.py" ]]; then chmod +x "$CLAUDE_DIR/scripts/workday-hours.py"; fi
+fi
+
+if [[ $DO_MIGRATE -eq 1 ]]; then
+  say ""; say "Migrate existing agent instructions"
+  claude_bin="${SETUP_CLAUDE_BIN:-claude}"
+  mode=llm
+  if [[ $NO_LLM -eq 1 ]]; then
+    mode=no-llm
+  elif ! command -v "$claude_bin" >/dev/null 2>&1; then
+    warn "claude not found, so migrating without a model (--no-llm): block added, conflicts listed"
+    mode=no-llm
+  fi
+  if [[ -z "$PROJECT" && "$PWD" != "$HOME" && "$PWD" != "$REPO_DIR" ]] &&
+     python3 "$REPO_DIR/lib/migrate.py" has-project "$PWD" &&
+     [[ $HAVE_TTY -eq 1 ]] && ask_yn "  Also migrate the agent files in this project ($PWD)?" n; then
+    PROJECT="$PWD"
+  fi
+  mflags=(--claude-dir "$CLAUDE_DIR" --state-dir "$STATE_DIR" --mode "$mode" --name "$NAME"
+          --stamp "$STAMP" --claude-bin "$claude_bin")
+  [[ -n "$PROJECT" ]] && mflags+=(--project "$PROJECT")
+  [[ $DRY -eq 1 ]] && mflags+=(--dry-run)
+  [[ $YES -eq 1 ]] && mflags+=(--yes)
+  [[ $HAVE_TTY -eq 1 ]] && mflags+=(--tty)
+  python3 "$REPO_DIR/lib/migrate.py" run "${mflags[@]}" || die "migrate failed (files written so far have backups and are in the manifest)"
 fi
 
 if [[ $DO_PLUGINS -eq 1 ]]; then
@@ -263,10 +342,10 @@ if [[ $DO_TOOLS -eq 1 ]]; then
     skip "Claude Code already installed ($(claude --version 2>/dev/null | head -1))"
   elif [[ $DRY -eq 1 ]]; then
     say "… would offer the official installer: curl -fsSL https://claude.ai/install.sh | bash"
-  elif ask_yn "  Install Claude Code with the official installer (https://claude.ai/install.sh)?" y; then
+  elif ask_strict "  Install Claude Code with the official installer (https://claude.ai/install.sh)?" y; then
     curl -fsSL https://claude.ai/install.sh | bash && ok "Claude Code installed"
   else
-    warn "Claude Code not installed. See https://code.claude.com/docs/en/setup"
+    warn "Claude Code not installed (needs a yes or --yes). See https://code.claude.com/docs/en/setup"
   fi
 fi
 
@@ -284,6 +363,10 @@ fi
 [[ $DO_PLUGINS -eq 1 ]] && say "! Plugins: on first start, accept the progress-bar marketplace prompt, or run '/plugin install progress-bar@progress-bar'"
 say "! Restart Claude Code so the output style and plugins load"
 [[ $DO_FORMAT -eq 1 ]] && say "! Verify: run '/output-style' in Claude Code and check adhd-friendly is selected"
+if [[ $DO_MIGRATE -eq 1 ]]; then
+  say "! Migrate: fix any conflicting lines listed above by hand, or re-run with the model (drop --no-llm)"
+  [[ -f "$CLAUDE_DIR/output-styles/adhd-friendly.md" ]] || say "! Migrate: the rules point to the adhd-friendly output style. Install it with './setup.sh --format'"
+fi
 [[ -n "$TOOLS_NOTE" ]] && say "! Tools skipped: $TOOLS_NOTE"
 [[ $DRY -eq 1 ]] && say "(dry run: nothing was written)"
 say "Undo everything: ./uninstall.sh"
