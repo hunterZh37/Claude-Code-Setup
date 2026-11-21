@@ -82,7 +82,7 @@ def merge(a):
         if cur == value:
             print(f"SAME   {dotted(path)}")
             continue
-        if cur is not MISSING and not force:
+        if cur is not MISSING and cur is not None and not force:  # null counts as unset
             print(f"KEEP   {dotted(path)} (yours: {json.dumps(cur)[:60]})")
             continue
         # walk and create parents, remembering the first one we created

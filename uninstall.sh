@@ -62,6 +62,8 @@ if [[ -f "$MANIFEST" ]]; then
           helper block-remove "$path" "$TMP/out"
           if [[ ! -s "$TMP/out" && "$bak" == NONE ]]; then
             act "delete $label (setup created it)" rm -f "$path"
+          elif [[ ! -s "$TMP/out" && -f "$bak" ]]; then
+            act "restore $label from $(tilde "$bak")" helper write "$bak" "$path"
           elif ! cmp -s "$TMP/out" "$path"; then
             act "remove the setup block from $label" helper write "$TMP/out" "$path"
           fi

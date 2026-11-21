@@ -251,6 +251,14 @@ def call_llm(claude_bin, prompt):
     return (body if body.endswith("\n") else body + "\n", changes.group(1).strip() if changes else "", out), None
 
 
+def added_lines(original, migrated):
+    """Lines the model added that are not format rules: invented content."""
+    have = set(original.splitlines())
+    return [(i, line) for i, line in enumerate(migrated.splitlines(), 1)
+            if line.strip() and line not in have and not line.startswith(MIGRATED_NOTE)
+            and not FORMAT_RE.search(line)]
+
+
 def missing_lines(original, migrated):
     """Non-format lines of the original that are not in the migrated text, verbatim."""
     fmt_nums = {n for n, _ in analyze(original)[0]}
@@ -386,10 +394,16 @@ def run(a):
                     if changes:
                         print("  Model's changes:\n" + "\n".join("    " + c for c in changes.splitlines()))
                     lost = missing_lines(body, migrated)
+                    added = added_lines(body, migrated)
                     if lost:
                         print(f"✗ the model dropped {len(lost)} non-format line(s):")
                         for n, line in lost[:20]:
                             print(f"    {n}: {line}")
+                    if added:
+                        print(f"✗ the model added {len(added)} line(s) that are not format rules:")
+                        for n, line in added[:20]:
+                            print(f"    {n}: {line}")
+                    if lost or added:
                         if a.yes or not ui.ask("  Use the model's version anyway?", False):
                             print("○ model version rejected, block only")
                             migrated = None

@@ -262,7 +262,7 @@ if [[ $DO_FORMAT -eq 1 ]]; then
 import json, os, sys
 p = sys.argv[1]
 try:
-    print(json.load(open(p, encoding="utf-8-sig")).get("outputStyle", "") if os.path.exists(p) else "")
+    print((json.load(open(p, encoding="utf-8-sig")).get("outputStyle") or "") if os.path.exists(p) else "")
 except Exception:
     print("")
 PY

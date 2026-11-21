@@ -466,3 +466,19 @@ BR="$WORK/bench-emptytext"; mkdir -p "$BR/A" "$BR/B"
 printf '{"arm":"A","id":"fix-2","run":1,"model":"m","text":""}' >"$BR/A/fix-2-r1.json"; printf '{"arm":"B","id":"fix-2","run":1,"model":"m","text":null}' >"$BR/B/fix-2-r1.json"
 check "bench score handles empty replies" bash -c "python3 '$REPO/bench/score.py' '$BR' >/dev/null"
 check "bench --only with no matching task fails clearly" bash -c "'$REPO/bench/run.sh' --model x --only nope --yes --claude '$REPO/tests/fakes/bench-claude' --out '$WORK/bench-nope' 2>&1 | grep -q 'no tasks match'"
+
+echo "S14. Round 8"
+H="$WORK/h-projonly"; mkdir -p "$H" "$WORK/po"
+rc=0; out="$(HOME="$H" "$REPO/setup.sh" --yes --format --project "$WORK/po" </dev/null 2>&1)" || rc=$?
+check "--project without --migrate: warns and finishes" bash -c "test $rc = 0 && grep -q 'only matters with --migrate' <<<\"\$1\"" _ "$out"
+for mode in adds ws; do
+  M="$WORK/h-m$mode"; new_migrate_home "$M"
+  SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=$mode mig "$M" --yes >"$WORK/m$mode.log" 2>&1
+  check "model '$mode': its version rejected" bash -c "! grep -q 'Migrated by' '$M/home/.claude/CLAUDE.md'"
+done
+H="$WORK/h-nullstyle"; mkdir -p "$H/.claude"; echo '{"outputStyle": null}' >"$H/.claude/settings.json"
+out="$(inst "$H" --format 2>&1)"
+check "outputStyle null is treated as unset: no 'kept' warning" bash -c "! grep -q \"kept your outputStyle\" <<<\"\$1\"" _ "$out"
+H="$WORK/h-ws"; mkdir -p "$H/.claude"; printf '  \n\n' >"$H/.claude/CLAUDE.md"
+inst "$H" --format >/dev/null; uninst "$H" >/dev/null
+check "whitespace-only CLAUDE.md restored byte for byte" bash -c "printf '  \n\n' | cmp -s - '$H/.claude/CLAUDE.md'"
