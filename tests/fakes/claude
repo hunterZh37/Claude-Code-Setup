@@ -77,6 +77,17 @@ if mode == "block2":
     kept = kept + blk + blk
 if mode == "longedit":
     edit("LONGLINE", lambda ln: ln[:-1])
+if mode == "factfmt":
+    kept.append("Use tables to show the Q3 revenue of 5 million.")
+if mode == "reword":
+    kept = []
+    for line in body.split("\n"):
+        if line.startswith("- Never use tables"):
+            kept.append("- Use tables for options and metrics.")
+        elif line.startswith("- ") and bad.search(line):
+            continue
+        else:
+            kept.append(line)
 if mode == "drops":
     kept = [ln for ln in kept if "npm test" not in ln]
 out = "\n".join(kept).rstrip("\n") + "\n<!-- Migrated by Claude-Code-Setup: reply-format rules reconciled, see .bak file for the original -->"

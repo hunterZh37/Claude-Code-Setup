@@ -39,3 +39,17 @@ mig() { # mig dir [flags...]
 mkdir -p "$WORK/bin"
 printf '#!/bin/sh\nexit 0\n' >"$WORK/bin/rtk"
 chmod +x "$WORK/bin/rtk"
+
+non_format_same() { # the original's non-format lines all appear, byte for byte, in order
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+sys.path.insert(0, sys.argv[0] and __import__("os").environ["REPO"] + "/lib")
+from migrate import analyze
+orig, new = open(sys.argv[1]).read(), open(sys.argv[2]).read()
+fmt = {n for n, _ in analyze(orig)[0]}
+want = [l for i, l in enumerate(orig.splitlines(), 1) if i not in fmt]
+it = iter(new.splitlines())
+sys.exit(0 if all(any(l == x for x in it) for l in want) else 1)
+PY
+}
+export REPO

@@ -522,3 +522,24 @@ M="$WORK/h-abom"; mkdir -p "$M/home/.claude"; printf '\xef\xbb\xbf# Rules\n- Run
 (cd "$M" && HOME="$M/home" SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=ok "$REPO/setup.sh" --yes --migrate --name Sam </dev/null >"$WORK/abom.log" 2>&1)
 check "BOM file: model migration accepted" has "$M/home/.claude/CLAUDE.md" "Migrated by"
 check "BOM file: BOM kept" python3 -c "import sys; sys.exit(0 if open(sys.argv[1],'rb').read(3) == b'\\xef\\xbb\\xbf' else 1)" "$M/home/.claude/CLAUDE.md"
+
+echo "S17. Round 11"
+M="$WORK/h-factfmt"; new_migrate_home "$M"
+SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=factfmt mig "$M" --yes >"$WORK/factfmt.log" 2>&1
+check "model adds a format-word line with a new fact far from any conflict: rejected" bash -c "! grep -q 'Q3 revenue' '$M/home/.claude/CLAUDE.md'"
+M="$WORK/h-reword"; new_migrate_home "$M"
+SETUP_CLAUDE_BIN="$FAKE" FAKE_CLAUDE_MODE=reword mig "$M" --yes >"$WORK/reword.log" 2>&1
+check "model rewords a conflict line in place: accepted" has "$M/home/.claude/CLAUDE.md" "- Use tables for options and metrics."
+check "reworded file keeps every other line" non_format_same "$FIX/user/CLAUDE.md" "$M/home/.claude/CLAUDE.md"
+M="$WORK/h-mdry2"; new_migrate_home "$M"
+rc=0; out="$(cd "$M" && HOME="$M/home" "$REPO/setup.sh" --dry-run --migrate --no-llm </dev/null 2>&1)" || rc=$?
+check "no tty, --dry-run --migrate: shows diffs, exits 0" bash -c "test $rc = 0 && grep -q '(migrated)' <<<\"\$1\"" _ "$out"
+H="$WORK/h-cfgmismatch"; mkdir -p "$H"; CLAUDE_CONFIG_DIR="$H/a" inst "$H" --format >/dev/null
+check "uninstall with a different CLAUDE_CONFIG_DIR finds nothing and keeps files" bash -c "CLAUDE_CONFIG_DIR='$H/b' HOME='$H' '$REPO/uninstall.sh' | grep -q 'Nothing to undo' && test -f '$H/a/CLAUDE.md'"
+H="$WORK/h-nullplug"; mkdir -p "$H/.claude"; echo '{"enabledPlugins": {"progress-bar@progress-bar": null}}' >"$H/.claude/settings.json"; inst "$H" --plugins >/dev/null
+check "plugin set to null is treated as unset" test "$(json_get "$H/.claude/settings.json" enabledPlugins progress-bar@progress-bar)" = true
+check "hours: --prefix with a literal ~" bash -c "TZ=UTC HOME='/Users/sam' CLAUDE_CONFIG_DIR='$WORK/h-hrs2/cfg' python3 '$HS' 2026-04-01 --prefix '~/work' | grep -q 'events: 3'"
+RS="$WORK/My Repos/Claude Code Setup"; mkdir -p "$RS"; (cd "$REPO" && tar cf - --exclude .git .) | (cd "$RS" && tar xf -)
+H="$WORK/h-repospace"; mkdir -p "$H"
+check "repo cloned into a path with spaces: install + uninstall" bash -c "HOME='$H' '$RS/setup.sh' --yes --format --commands --plugins </dev/null >/dev/null && HOME='$H' '$RS/uninstall.sh' >/dev/null && test -z \"\$(find '$H' -type f)\""
+check "Brewfile has only brew and cask lines" bash -c "! grep -vE '^(#.*|brew \"[a-z0-9-]+\" *(#.*)?|cask \"[a-z0-9-]+\" *(#.*)?|)$' '$REPO/Brewfile'"

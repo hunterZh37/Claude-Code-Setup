@@ -260,22 +260,6 @@ def call_llm(claude_bin, prompt):
     return (body if body.endswith("\n") else body + "\n", changes.group(1).strip() if changes else "", out), None
 
 
-def non_format(text, keep=None):
-    """The ordered list of non-blank, non-format lines. With keep (a set of lines that
-    were non-format in the original), those lines count even if they look like format."""
-    fmt_nums = {n for n, _ in analyze(text)[0]}
-    out = []
-    for i, line in enumerate(text.splitlines(), 1):
-        if not line.strip() or line.startswith(MIGRATED_NOTE):
-            continue
-        if keep is not None:
-            if line in keep or not FORMAT_RE.search(line):
-                out.append(line)
-        elif i not in fmt_nums:
-            out.append(line)
-    return out
-
-
 def restore_endings(original, migrated):
     """Give every line the model kept its original line ending (LF, CRLF, mixed);
     new lines get the file's most common ending."""
@@ -296,24 +280,49 @@ def restore_endings(original, migrated):
 
 
 def integrity(original, migrated):
-    """Problems with the model's version: every non-format line must come back
-    exactly once, unchanged, in the same order, with nothing added."""
-    changeable = {n for n, _, _ in analyze(original)[1]}  # only conflicting format rules may change
-    want = [ln for i, ln in enumerate(original.splitlines(), 1)
-            if ln.strip() and i not in changeable and not ln.startswith(MIGRATED_NOTE)]
-    got = non_format(migrated, keep=set(want))
-    if got == want:
-        return []
+    """Problems with the model's version. Only the lines analyze() flags as
+    conflicting may change: each may be deleted or replaced in place by at most
+    one reworded format rule. Every other line must come back once, byte for
+    byte, in the same order. Nothing may be added anywhere else."""
     from collections import Counter
-    cw, cg = Counter(want), Counter(got)
+    orig = original.splitlines()
+    changeable = {n for n, _, _ in analyze(original)[1]}
+    want, slots, gap = [], [], 0  # slots[k] = conflict lines between want[k-1] and want[k]
+    for i, ln in enumerate(orig, 1):
+        if not ln.strip() or ln.startswith(MIGRATED_NOTE):
+            continue
+        if i in changeable:
+            gap += 1
+        else:
+            slots.append(gap)
+            want.append(ln)
+            gap = 0
+    slots.append(gap)
+    keep = set(want)
+    got, extra, bad_place = [], Counter(), []
+    k = 0  # protected lines seen so far
+    for ln in migrated.splitlines():
+        if not ln.strip() or ln.startswith(MIGRATED_NOTE):
+            continue
+        if ln in keep and k < len(want) and ln == want[k]:
+            got.append(ln)
+            k += 1
+        elif ln in keep:
+            got.append(ln)  # out of order or duplicated, reported below
+        elif FORMAT_RE.search(ln) and extra[k] < slots[k]:
+            extra[k] += 1  # a reworded rule where a conflicting one stood
+        else:
+            bad_place.append(ln)
     problems = []
+    cw, cg = Counter(want), Counter(got)
     lost = list((cw - cg).elements())
-    added = list((cg - cw).elements())
+    dup = list((cg - cw).elements())
     if lost:
         problems.append((f"dropped {len(lost)} non-format line(s)", lost))
-    if added:
-        problems.append((f"added {len(added)} line(s) that are not format rules", added))
-    if not lost and not added:
+    if bad_place or dup:
+        added = bad_place + dup
+        problems.append((f"added {len(added)} line(s) that are not format rules or not in place of one", added))
+    if not problems and got != want:
         problems.append(("moved non-format lines out of their order", []))
     return problems
 
